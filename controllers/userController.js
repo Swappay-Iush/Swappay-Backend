@@ -1,5 +1,6 @@
 const bcrypt = require('bcrypt'); //Importamos la librería bcrypt para encriptar contraseñas.
-const {User, Products} = require("../models") //Importamos el modelo User y Products.
+const User = require("../models/User");
+const Products = require("../models/Products");
 const fs = require('fs'); //Importamos el módulo fs para manejar el sistema de archivos.
 const path = require('path'); //Importamos path para manejar rutas de archivos.
 

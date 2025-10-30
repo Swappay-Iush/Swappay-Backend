@@ -68,4 +68,8 @@ const Products = sequelize.define('Products', { //Definimos el modelo Products c
     tableName: 'products', //Nombre de la tabla en la base de datos
 });
 
+// Asociación: Un producto pertenece a un usuario
+const User = require('./User');
+Products.belongsTo(User, { foreignKey: 'idUser', as: 'user', onDelete: 'CASCADE' });
+
 module.exports = Products; //Exportamos el modelo para usarlo en otras partes de la aplicación.
