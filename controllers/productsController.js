@@ -1,8 +1,6 @@
-const Products = require("../models/Products") //Importamos el modelo User para interactuar con la base de datos.
-const User = require('../models/User') //Importamos el modelo User para las asociaciones.
+const {User, Products} = require("../models") //Importamos el modelo User y Products.
 const fs = require('fs'); //Importamos el módulo fs para manejar el sistema de archivos.
 const path = require('path'); //Importamos path para manejar rutas de archivos.
-
 
 const createProducts = async(req, res) =>  { //Creamos un producto nuevo.
     // Obtenemos los datos del producto desde el cuerpo de la solicitud
@@ -37,7 +35,13 @@ const createProducts = async(req, res) =>  { //Creamos un producto nuevo.
 
 const getAllProductos = async (req, res) => { //Obtenemos todos los productos disponibles.
     try {
-        const productos = await Products.findAll(); //Buscamos todos los productos en la base de datos.
+        const productos = await Products.findAll({
+            include: [{
+                model: User,
+                as: 'user', // Debe coincidir con el alias definido en Products.associate
+                attributes: ['id', 'username', 'profileImage'] // Selecciona solo los campos que necesitas
+            }]
+        }); //Buscamos todos los productos con la información del usuario.
         res.status(200).json(productos); //Enviamos los productos en la respuesta.
     } catch (error) {
         res.status(400).json({ error: error.message });

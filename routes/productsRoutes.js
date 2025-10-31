@@ -11,6 +11,8 @@ router.post('/', uploadProduct.fields([ // Usamos .fields para múltiples campos
   productsController.createProducts // Llama al controlador después de la subida de archivos
 );
 
+router.get('/', productsController.getAllProductos) //Obtener todos los productos.
+
 router.get('/:id', productsController.getProductsByUser) //Obtener productos por ID de usuario
 
 router.put('/:id', uploadProduct.fields([
