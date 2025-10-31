@@ -22,6 +22,7 @@ const Products = require('./models/Products');
 const CartItem = require('./models/CartItem');
 const ChatRoom = require('./models/ChatRoom');
 const Message = require('./models/Message');
+const TradeAgreement = require('./models/TradeAgreement'); // ⭐ NUEVO: Modelo de acuerdos de intercambio
 
 // ======================= ASOCIACIONES =======================
 /**
@@ -47,6 +48,18 @@ ChatRoom.belongsTo(Products, {
   as: 'Product'            // Alias para usar en queries: include: { model: Products, as: 'Product' }
 });
 
+// ⭐ NUEVO: Asociación de TradeAgreement con ChatRoom
+TradeAgreement.belongsTo(ChatRoom, {
+  foreignKey: 'chatRoomId', // Columna en trade_agreements que referencia a chat_rooms.id
+  as: 'ChatRoom'            // Alias para incluir datos de la sala
+});
+
+// Relación inversa: ChatRoom tiene un TradeAgreement
+ChatRoom.hasOne(TradeAgreement, {
+  foreignKey: 'chatRoomId',
+  as: 'TradeAgreement'
+});
+
 // ======================= INICIALIZACIÓN APP =======================
 const app = express();
 const port = 3000;
@@ -58,6 +71,7 @@ app.use(morgan('dev'));
 app.use(express.json());
 
 // ======================= SINCRONIZAR BASE DE DATOS =======================
+// Sincroniza modelos
 sequelize.sync()
     .then(() => {
         console.log("Modelos Sincronizados.");
@@ -75,6 +89,7 @@ const productRoutes = require('./routes/productsRoutes');
 const cartRoutes = require('./routes/cartRoutes');
 const productOfferRoutes = require('./routes/productOfferRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const tradeAgreementRoutes = require('./routes/tradeAgreementRoutes'); // ⭐ NUEVO: Rutas de acuerdos de intercambio
 
 
 app.use('/users', userRoutes);
@@ -85,6 +100,7 @@ app.use('/products', productRoutes);
 app.use('/carrito', cartRoutes);
 app.use('/product-offer', productOfferRoutes);
 app.use('/chat', chatRoutes);
+app.use('/chat/trade', tradeAgreementRoutes); // ⭐ NUEVO: Prefix /chat/trade para acuerdos
 
 app.get('/', (req, res) => {
     res.send("Hola desde la API de Swappay.");
