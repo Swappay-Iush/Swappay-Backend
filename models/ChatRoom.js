@@ -24,25 +24,14 @@ const ChatRoom = sequelize.define('ChatRoom', {
    * Relación: FK a users.id
    * CASCADE: Si se elimina/actualiza el usuario, se elimina/actualiza la sala
    */
-
-const { DataTypes } = require('sequelize');
-const sequelize = require('../database');
-
-// ChatRoom representa una conversación entre dos usuarios
-const ChatRoom = sequelize.define('ChatRoom', {
-
   user1Id: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    references: {
-
-      model: 'users',  // Nombre de la tabla referenciada
-      key: 'id',       // Columna referenciada en users
-    },
-    onDelete: 'CASCADE',  // Si se borra el usuario, se borra la sala
-    onUpdate: 'CASCADE',  // Si se actualiza el ID del usuario, se actualiza aquí
+    references: { model: 'users', key: 'id' },
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE',
   },
-  
+
   // ======================= COLUMNA: user2Id =======================
   /**
    * ID del segundo usuario en la conversación
@@ -51,16 +40,11 @@ const ChatRoom = sequelize.define('ChatRoom', {
   user2Id: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    references: {
-
-      model: 'users',
-      key: 'id',
-    },
+    references: { model: 'users', key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   },
 
-  
   // ======================= COLUMNA: productId =======================
   /**
    * ID del producto sobre el que se está conversando
@@ -70,29 +54,13 @@ const ChatRoom = sequelize.define('ChatRoom', {
   productId: {
     type: DataTypes.INTEGER,
     allowNull: false,
-    references: {
-      model: 'products', // Nombre de la tabla de productos
-      key: 'id',
-    },
-    onDelete: 'CASCADE', // Si se borra el producto, se borra la sala
-    onUpdate: 'CASCADE',
-  }
-}, { 
-  tableName: 'chat_rooms',  // Nombre exacto de la tabla en la base de datos
-  timestamps: true           // Añade automáticamente createdAt y updatedAt
-});
-
-  user2Id: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    references: {
-      model: 'users',
-      key: 'id',
-    },
+    references: { model: 'products', key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   }
-}, { tableName: 'chat_rooms', timestamps: true });
-
+}, {
+  tableName: 'chat_rooms',
+  timestamps: true
+});
 
 module.exports = ChatRoom;

@@ -61,9 +61,7 @@ ChatRoom.hasOne(TradeAgreement, {
   as: 'TradeAgreement'
 });
 
-require('./models/CartItem');
-require('./models/ChatRoom');
-require('./models/Message');
+// Nota: No es necesario volver a requerir los modelos aquí; ya están importados arriba
 
 // ======================= INICIALIZACIÓN APP =======================
 const app = express();
@@ -110,8 +108,6 @@ app.use('/product-offer', productOfferRoutes);
 
 app.use('/chat', chatRoutes);
 app.use('/chat/trade', tradeAgreementRoutes); // ⭐ NUEVO: Prefix /chat/trade para acuerdos
-=======
-
 
 app.get('/', (req, res) => {
     res.send("Hola desde la API de Swappay.");
@@ -143,30 +139,21 @@ io.on('connection', (socket) => {
      *   3. Emite 'newMessage' a todos los usuarios en la sala
      */
     socket.on('sendMessage', async ({ chatRoomId, senderId, content, user1Id, user2Id }) => {
-        // Nota: Se hace require local de los modelos (podría optimizarse usando las constantes de arriba)
-        const ChatRoom = require('./models/ChatRoom');
-        const Message = require('./models/Message');
+        try {
+            // Si la sala no existe, créala (requiere user1Id y user2Id)
+            let chatRoom = await ChatRoom.findByPk(chatRoomId);
+            if (!chatRoom && user1Id && user2Id) {
+                chatRoom = await ChatRoom.create({ id: chatRoomId, user1Id, user2Id });
+            }
 
-    // Crea la sala en chat room
-    socket.on('sendMessage', async ({ chatRoomId, senderId, content, user1Id, user2Id }) => {
-        const ChatRoom = require('./models/ChatRoom');
-        const Message = require('./models/Message');
+            // Guardar el mensaje en la base de datos
+            await Message.create({ chatRoomId, senderId, content });
 
-        // Si la sala no existe, créala (requiere user1Id y user2Id)
-        let chatRoom = await ChatRoom.findByPk(chatRoomId);
-        if (!chatRoom && user1Id && user2Id) {
-            chatRoom = await ChatRoom.create({ id: chatRoomId, user1Id, user2Id });
+            // Emitir el mensaje a todos los sockets en la sala chat_{chatRoomId}
+            io.to(`chat_${chatRoomId}`).emit('newMessage', { chatRoomId, senderId, content });
+        } catch (err) {
+            console.error('Error en sendMessage:', err);
         }
-
-        // Guardar el mensaje en la base de datos
-        await Message.create({ chatRoomId, senderId, content });
-        
-        // Emitir el mensaje a todos los sockets en la sala chat_{chatRoomId}
-
-        // Guardar el mensaje
-        await Message.create({ chatRoomId, senderId, content });
-
-        io.to(`chat_${chatRoomId}`).emit('newMessage', { chatRoomId, senderId, content });
     });
 });
 
@@ -194,17 +181,6 @@ cron.schedule('0 * * * *', async () => {
         });
         
         // Log solo si se eliminaron mensajes
-
-const Message = require('./models/Message');
-cron.schedule('0 * * * *', async () => {
-    try {
-        const limite = new Date(Date.now() - 1 * 60 * 60 * 1000); // 1 hora
-        const eliminados = await Message.destroy({
-            where: {
-                createdAt: { [Op.lt]: limite }
-            }
-        });
-
         if (eliminados > 0) {
             console.log(`Mensajes eliminados automáticamente: ${eliminados}`);
         }
@@ -220,7 +196,7 @@ cron.schedule('0 * * * *', async () => {
  * Razón: httpServer incluye tanto Express como Socket.IO
  * Si se usa app.listen(), Socket.IO no funcionará
  */
-=======
+
 
 httpServer.listen(port, () => {
     console.log(`Servidor y Socket.IO funcionando en puerto ${port}`);
