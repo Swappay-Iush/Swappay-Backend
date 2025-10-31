@@ -1,3 +1,4 @@
+
 // ======================= MODELO: ChatRoom =======================
 /**
  * Representa una sala de chat entre dos usuarios sobre un producto específico
@@ -23,10 +24,18 @@ const ChatRoom = sequelize.define('ChatRoom', {
    * Relación: FK a users.id
    * CASCADE: Si se elimina/actualiza el usuario, se elimina/actualiza la sala
    */
+
+const { DataTypes } = require('sequelize');
+const sequelize = require('../database');
+
+// ChatRoom representa una conversación entre dos usuarios
+const ChatRoom = sequelize.define('ChatRoom', {
+
   user1Id: {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
+
       model: 'users',  // Nombre de la tabla referenciada
       key: 'id',       // Columna referenciada en users
     },
@@ -43,18 +52,19 @@ const ChatRoom = sequelize.define('ChatRoom', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
+
       model: 'users',
       key: 'id',
     },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   },
+
   
   // ======================= COLUMNA: productId =======================
   /**
    * ID del producto sobre el que se está conversando
    * Tipo: INTEGER
-   * Obligatorio: Sí
    * Relación: FK a products.id
    */
   productId: {
@@ -72,11 +82,17 @@ const ChatRoom = sequelize.define('ChatRoom', {
   timestamps: true           // Añade automáticamente createdAt y updatedAt
 });
 
-/**
- * ⭐ NOTA HISTÓRICA: 
- * En una versión anterior se definió ChatRoom.associate = (...) aquí
- * Fue removido para centralizar todas las asociaciones en index.js
- * Las asociaciones ahora están en index.js líneas 19-33
- */
+  user2Id: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: 'users',
+      key: 'id',
+    },
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE',
+  }
+}, { tableName: 'chat_rooms', timestamps: true });
+
 
 module.exports = ChatRoom;

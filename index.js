@@ -11,6 +11,7 @@ const cron = require('node-cron');
 const { Op } = require('sequelize');
 
 // ======================= MODELOS =======================
+
 /**
  * ⭐ CAMBIO IMPORTANTE: Ahora se asignan a constantes en lugar de solo hacer require()
  * Motivo: Necesitamos las referencias para definir asociaciones de Sequelize
@@ -60,6 +61,10 @@ ChatRoom.hasOne(TradeAgreement, {
   as: 'TradeAgreement'
 });
 
+require('./models/CartItem');
+require('./models/ChatRoom');
+require('./models/Message');
+
 // ======================= INICIALIZACIÓN APP =======================
 const app = express();
 const port = 3000;
@@ -71,6 +76,7 @@ app.use(morgan('dev'));
 app.use(express.json());
 
 // ======================= SINCRONIZAR BASE DE DATOS =======================
+
 // Sincroniza modelos
 sequelize.sync()
     .then(() => {
@@ -88,8 +94,10 @@ const verificationRoutes = require('./routes/verificationRoutes');
 const productRoutes = require('./routes/productsRoutes');
 const cartRoutes = require('./routes/cartRoutes');
 const productOfferRoutes = require('./routes/productOfferRoutes');
+
 const chatRoutes = require('./routes/chatRoutes');
 const tradeAgreementRoutes = require('./routes/tradeAgreementRoutes'); // ⭐ NUEVO: Rutas de acuerdos de intercambio
+
 
 
 app.use('/users', userRoutes);
@@ -99,19 +107,18 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/products', productRoutes);
 app.use('/carrito', cartRoutes);
 app.use('/product-offer', productOfferRoutes);
+
 app.use('/chat', chatRoutes);
 app.use('/chat/trade', tradeAgreementRoutes); // ⭐ NUEVO: Prefix /chat/trade para acuerdos
+=======
+
 
 app.get('/', (req, res) => {
     res.send("Hola desde la API de Swappay.");
 });
 
 // ======================= SOCKET.IO CHAT =======================
-/**
- * Configuración de Socket.IO para chat en tiempo real
- * httpServer: Servidor HTTP que combina Express + Socket.IO
- * io: Instancia de Socket.IO con CORS habilitado para el frontend
- */
+
 const httpServer = require('http').createServer(app);
 const io = require('socket.io')(httpServer, { cors: { origin: true, credentials: true } });
 
@@ -119,16 +126,12 @@ const io = require('socket.io')(httpServer, { cors: { origin: true, credentials:
 io.on('connection', (socket) => {
     console.log('Usuario conectado:', socket.id);
 
-    // ======================= EVENTO: joinRoom =======================
-    /**
-     * El cliente emite este evento cuando quiere unirse a una sala de chat
-     * Payload esperado: { chatRoomId }
-     * Acción: Une el socket a una sala privada identificada como chat_{chatRoomId}
-     */
+
     socket.on('joinRoom', ({ chatRoomId }) => {
         socket.join(`chat_${chatRoomId}`);
         console.log(`Socket ${socket.id} se unió a sala chat_${chatRoomId}`);
     });
+
 
     // ======================= EVENTO: sendMessage =======================
     /**
@@ -143,22 +146,32 @@ io.on('connection', (socket) => {
         // Nota: Se hace require local de los modelos (podría optimizarse usando las constantes de arriba)
         const ChatRoom = require('./models/ChatRoom');
         const Message = require('./models/Message');
-        
+
+    // Crea la sala en chat room
+    socket.on('sendMessage', async ({ chatRoomId, senderId, content, user1Id, user2Id }) => {
+        const ChatRoom = require('./models/ChatRoom');
+        const Message = require('./models/Message');
+
         // Si la sala no existe, créala (requiere user1Id y user2Id)
         let chatRoom = await ChatRoom.findByPk(chatRoomId);
         if (!chatRoom && user1Id && user2Id) {
             chatRoom = await ChatRoom.create({ id: chatRoomId, user1Id, user2Id });
         }
-        
+
         // Guardar el mensaje en la base de datos
         await Message.create({ chatRoomId, senderId, content });
         
         // Emitir el mensaje a todos los sockets en la sala chat_{chatRoomId}
+
+        // Guardar el mensaje
+        await Message.create({ chatRoomId, senderId, content });
+
         io.to(`chat_${chatRoomId}`).emit('newMessage', { chatRoomId, senderId, content });
     });
 });
 
 // ======================= TAREA PROGRAMADA: BORRAR MENSAJES VIEJOS =======================
+
 /**
  * ⭐ CAMBIO CRÍTICO: Se eliminó la declaración duplicada de Message
  * Antes: const Message = require('./models/Message'); (aquí en línea 99)
@@ -181,6 +194,17 @@ cron.schedule('0 * * * *', async () => {
         });
         
         // Log solo si se eliminaron mensajes
+
+const Message = require('./models/Message');
+cron.schedule('0 * * * *', async () => {
+    try {
+        const limite = new Date(Date.now() - 1 * 60 * 60 * 1000); // 1 hora
+        const eliminados = await Message.destroy({
+            where: {
+                createdAt: { [Op.lt]: limite }
+            }
+        });
+
         if (eliminados > 0) {
             console.log(`Mensajes eliminados automáticamente: ${eliminados}`);
         }
@@ -190,11 +214,14 @@ cron.schedule('0 * * * *', async () => {
 });
 
 // ======================= INICIAR SERVIDOR =======================
+
 /**
  * ⚠️ IMPORTANTE: Se usa httpServer.listen() NO app.listen()
  * Razón: httpServer incluye tanto Express como Socket.IO
  * Si se usa app.listen(), Socket.IO no funcionará
  */
+=======
+
 httpServer.listen(port, () => {
     console.log(`Servidor y Socket.IO funcionando en puerto ${port}`);
 });

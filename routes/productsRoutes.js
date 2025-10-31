@@ -15,6 +15,14 @@ router.get('/', productsController.getAllProductos) //Obtener todos los producto
 
 router.get('/:id', productsController.getProductsByUser) //Obtener productos por ID de usuario
 
+router.put('/:id', uploadProduct.fields([
+    { name: 'image1', maxCount: 1 },
+    { name: 'image2', maxCount: 1 },
+    { name: 'image3', maxCount: 1 }
+  ]),
+  productsController.updateProduct
+);
+
 router.delete('/:id', productsController.deleteProduct) //Eliminar un producto por su ID.
 
 module.exports = router; //Exportamos el router para usarlo en la aplicación principal.
