@@ -72,7 +72,25 @@ const acceptTrade = async (req, res) => {
     // 5. Guardar (el hook beforeSave actualizará tradeCompleted automáticamente)
     await tradeAgreement.save();
     
-    // 6. Preparar respuesta con mensajes descriptivos
+    // 6. Emitir evento Socket.IO para actualización en tiempo real
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`chat_${chatRoomId}`).emit('tradeStatusUpdated', {
+        chatRoomId: tradeAgreement.chatRoomId,
+        user1Accepted: tradeAgreement.user1Accepted,
+        user2Accepted: tradeAgreement.user2Accepted,
+        tradeCompleted: tradeAgreement.tradeCompleted,
+        currentUserAccepted: isUser1 ? tradeAgreement.user1Accepted : tradeAgreement.user2Accepted,
+        otherUserAccepted: isUser1 ? tradeAgreement.user2Accepted : tradeAgreement.user1Accepted,
+        completedAt: tradeAgreement.completedAt,
+        message: tradeAgreement.tradeCompleted === 'en_proceso' 
+          ? 'Ambos usuarios han aceptado el intercambio' 
+          : 'Aceptación actualizada'
+      });
+      console.log(`📡 Evento tradeStatusUpdated emitido a sala chat_${chatRoomId}`);
+    }
+    
+    // 7. Preparar respuesta con mensajes descriptivos
     let message = '';
     if (tradeAgreement.tradeCompleted === 'en_proceso') {
       message = '¡Intercambio en proceso! Ambos usuarios han aceptado.';

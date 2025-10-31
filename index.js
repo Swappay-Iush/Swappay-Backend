@@ -1,37 +1,24 @@
+// ======================= CONFIG =======================
+require('dotenv').config();
 
 // ======================= IMPORTS =======================
 const express = require('express');
-const sequelize = require('./database');
-const morgan = require('morgan');
-const jwt = require('jsonwebtoken');
 const path = require('path');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const morgan = require('morgan');
 const cron = require('node-cron');
 const { Op } = require('sequelize');
+const sequelize = require('./database');
 
 // ======================= MODELOS =======================
-
-/**
- * ⭐ CAMBIO IMPORTANTE: Ahora se asignan a constantes en lugar de solo hacer require()
- * Motivo: Necesitamos las referencias para definir asociaciones de Sequelize
- * Antes: require('./models/ChatRoom'); (sin asignación)
- * Ahora: const ChatRoom = require('./models/ChatRoom'); (con asignación)
- */
 const User = require('./models/User');
 const Products = require('./models/Products');
-const CartItem = require('./models/CartItem');
 const ChatRoom = require('./models/ChatRoom');
 const Message = require('./models/Message');
-const TradeAgreement = require('./models/TradeAgreement'); // ⭐ NUEVO: Modelo de acuerdos de intercambio
+const TradeAgreement = require('./models/TradeAgreement');
 
 // ======================= ASOCIACIONES =======================
-/**
- * ⭐ BLOQUE COMPLETAMENTE NUEVO - CRÍTICO PARA EL FUNCIONAMIENTO
- * Define las relaciones entre modelos usando Sequelize
- * Sin estas asociaciones, los 'include' en las consultas causan errores 500
- */
-
 // Asociaciones de ChatRoom con User (dos veces, porque hay dos usuarios por sala)
 ChatRoom.belongsTo(User, { 
   foreignKey: 'user1Id',  // Columna en chat_rooms que referencia a users.id
@@ -49,7 +36,7 @@ ChatRoom.belongsTo(Products, {
   as: 'Product'            // Alias para usar en queries: include: { model: Products, as: 'Product' }
 });
 
-// ⭐ NUEVO: Asociación de TradeAgreement con ChatRoom
+// Asociación de TradeAgreement con ChatRoom
 TradeAgreement.belongsTo(ChatRoom, {
   foreignKey: 'chatRoomId', // Columna en trade_agreements que referencia a chat_rooms.id
   as: 'ChatRoom'            // Alias para incluir datos de la sala
@@ -61,20 +48,15 @@ ChatRoom.hasOne(TradeAgreement, {
   as: 'TradeAgreement'
 });
 
-// Nota: No es necesario volver a requerir los modelos aquí; ya están importados arriba
-
 // ======================= INICIALIZACIÓN APP =======================
 const app = express();
-const port = 3000;
-
-require('dotenv').config();
+const port = process.env.PORT || 3000;
 app.use(cookieParser());
 app.use(cors({ origin: true, credentials: true }));
 app.use(morgan('dev'));
 app.use(express.json());
 
 // ======================= SINCRONIZAR BASE DE DATOS =======================
-
 // Sincroniza modelos
 sequelize.sync()
     .then(() => {
@@ -94,7 +76,7 @@ const cartRoutes = require('./routes/cartRoutes');
 const productOfferRoutes = require('./routes/productOfferRoutes');
 
 const chatRoutes = require('./routes/chatRoutes');
-const tradeAgreementRoutes = require('./routes/tradeAgreementRoutes'); // ⭐ NUEVO: Rutas de acuerdos de intercambio
+const tradeAgreementRoutes = require('./routes/tradeAgreementRoutes');
 
 
 
@@ -107,17 +89,18 @@ app.use('/carrito', cartRoutes);
 app.use('/product-offer', productOfferRoutes);
 
 app.use('/chat', chatRoutes);
-app.use('/chat/trade', tradeAgreementRoutes); // ⭐ NUEVO: Prefix /chat/trade para acuerdos
+app.use('/chat/trade', tradeAgreementRoutes);
 
 app.get('/', (req, res) => {
     res.send("Hola desde la API de Swappay.");
 });
 
 // ======================= SOCKET.IO CHAT =======================
-
 const httpServer = require('http').createServer(app);
 const io = require('socket.io')(httpServer, { cors: { origin: true, credentials: true } });
 
+// Hacer io accesible desde los controladores
+app.set('io', io);
 
 io.on('connection', (socket) => {
     console.log('Usuario conectado:', socket.id);
@@ -130,14 +113,6 @@ io.on('connection', (socket) => {
 
 
     // ======================= EVENTO: sendMessage =======================
-    /**
-     * El cliente emite este evento cuando envía un mensaje
-     * Payload esperado: { chatRoomId, senderId, content, user1Id?, user2Id? }
-     * Acción: 
-     *   1. Crea la sala si no existe (usando user1Id y user2Id opcionales)
-     *   2. Guarda el mensaje en la base de datos
-     *   3. Emite 'newMessage' a todos los usuarios en la sala
-     */
     socket.on('sendMessage', async ({ chatRoomId, senderId, content, user1Id, user2Id }) => {
         try {
             // Si la sala no existe, créala (requiere user1Id y user2Id)
@@ -159,15 +134,6 @@ io.on('connection', (socket) => {
 
 // ======================= TAREA PROGRAMADA: BORRAR MENSAJES VIEJOS =======================
 
-/**
- * ⭐ CAMBIO CRÍTICO: Se eliminó la declaración duplicada de Message
- * Antes: const Message = require('./models/Message'); (aquí en línea 99)
- * Error: "Identifier 'Message' has already been declared" - ya se importó en línea 17
- * Ahora: Usa el Message importado arriba
- * 
- * Cron job que se ejecuta cada hora (expresión: '0 * * * *')
- * Limpia mensajes con más de 1 hora de antigüedad para liberar espacio en BD
- */
 cron.schedule('0 * * * *', async () => {
     try {
         // Calcula la fecha límite: hace 1 hora desde ahora
@@ -190,13 +156,6 @@ cron.schedule('0 * * * *', async () => {
 });
 
 // ======================= INICIAR SERVIDOR =======================
-
-/**
- * ⚠️ IMPORTANTE: Se usa httpServer.listen() NO app.listen()
- * Razón: httpServer incluye tanto Express como Socket.IO
- * Si se usa app.listen(), Socket.IO no funcionará
- */
-
 
 httpServer.listen(port, () => {
     console.log(`Servidor y Socket.IO funcionando en puerto ${port}`);

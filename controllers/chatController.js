@@ -11,19 +11,11 @@ const Message = require('../models/Message');
 // Importa el modelo Products para validar productos
 const Products = require('../models/Products');
 
-// ⭐ CAMBIO AÑADIDO: Importa operadores de Sequelize para consultas avanzadas
-// Antes se usaba ChatRoom.sequelize.Op.or que causaba errores
 // Ahora se usa Op.or directamente (estándar de Sequelize)
 const { Op } = require('sequelize');
 
 // ======================= FUNCIÓN: CREAR SALA DE CHAT =======================
-/**
- * Endpoint: POST /chat/create-room
- * Descripción: Crea una nueva sala de chat entre dos usuarios para un producto específico.
- *              Si la sala ya existe, devuelve la existente (evita duplicados).
- * Body esperado: { user1Id, user2Id, productId }
- * Respuesta: { chatRoomId, user1Id, user2Id, productId, message }
- */
+
 const createRoom = async (req, res) => {
   // Extrae los datos del cuerpo de la petición
   const { user1Id, user2Id, productId } = req.body;
@@ -73,15 +65,6 @@ const createRoom = async (req, res) => {
   }
 };
 
-
-// ======================= FUNCIÓN: OBTENER SALA POR ID =======================
-/**
- * Endpoint: GET /chat/rooms/:id
- * Descripción: Obtiene información completa de una sala de chat específica por su ID.
- * Params: id (ID de la sala)
- * Respuesta: Objeto ChatRoom con datos de User1, User2 y Product incluidos
- * ⭐ CAMBIO: Ahora incluye datos relacionados de usuarios y producto
- */
 const getChatRoom = async (req, res) => {
   // Extrae el ID de la sala desde los parámetros de la URL
   const { id } = req.params;
@@ -103,8 +86,6 @@ const getChatRoom = async (req, res) => {
           attributes: ['id', 'username', 'email', 'profileImage']
         },
         {
-          // ⚠️ POSIBLE PROBLEMA: El modelo Products usa 'title' no 'name'
-          // Puede causar error 500 si estos atributos no coinciden con la tabla
           model: Products,
           as: 'Product', // Alias definido en las asociaciones (index.js)
           attributes: ['id', 'name', 'price', 'description', 'image']
@@ -126,15 +107,7 @@ const getChatRoom = async (req, res) => {
   }
 };
 
-// ======================= FUNCIÓN: OBTENER SALAS DE UN USUARIO =======================
-/**
- * Endpoint: GET /chat/user/:userId
- * Descripción: Obtiene todas las salas de chat donde participa un usuario específico.
- *              Busca salas donde el usuario sea user1Id O user2Id.
- * Params: userId (ID del usuario)
- * Respuesta: Array de ChatRoom con datos de User1 y User2 incluidos
- * ⭐ CAMBIO CRÍTICO: Ahora usa Op.or correctamente y incluye datos de usuarios
- */
+
 const getUserChatRooms = async (req, res) => {
   // Extrae el userId de los parámetros de la URL
   const { userId } = req.params;
@@ -143,7 +116,6 @@ const getUserChatRooms = async (req, res) => {
     // Busca todas las salas donde el usuario participe
     const chatRooms = await ChatRoom.findAll({
       where: {
-        // ⭐ CAMBIO CRÍTICO: Usa Op.or (importado arriba) en lugar de ChatRoom.sequelize.Op.or
         // Busca salas donde el usuario sea user1Id O user2Id
         [Op.or]: [
           { user1Id: userId },
@@ -163,8 +135,6 @@ const getUserChatRooms = async (req, res) => {
           as: 'User2', // Alias definido en las asociaciones (index.js)
           attributes: ['id', 'username', 'email', 'profileImage']
         },
-        // ⭐ NOTA: El include de Product fue removido a solicitud del usuario
-        // para evitar errores 500 por columnas no coincidentes (name, price, image)
       ]
     });
     
@@ -178,13 +148,7 @@ const getUserChatRooms = async (req, res) => {
 };
 
 // ======================= FUNCIÓN: OBTENER HISTORIAL DE MENSAJES =======================
-/**
- * Endpoint: GET /chat/messages/:chatRoomId
- * Descripción: Obtiene todos los mensajes de una sala específica ordenados cronológicamente.
- * Params: chatRoomId (ID de la sala)
- * Respuesta: Array de mensajes ordenados de más antiguo a más reciente
- * Estado: SIN CAMBIOS (función original)
- */
+
 const getMessages = async (req, res) => {
   // Extrae el chatRoomId de los parámetros de la URL
   const { chatRoomId } = req.params;
@@ -205,13 +169,10 @@ const getMessages = async (req, res) => {
 };
 
 // ======================= EXPORTACIONES =======================
-/**
- * Exporta todas las funciones del controlador para ser usadas en chatRoutes.js
- * ⭐ CAMBIOS: Se agregaron getChatRoom y getUserChatRooms a las exportaciones
- */
+
 module.exports = {
   createRoom,      // POST /chat/create-room
   getMessages,     // GET /chat/messages/:chatRoomId
-  getChatRoom,     // GET /chat/rooms/:id (⭐ AGREGADO)
-  getUserChatRooms // GET /chat/user/:userId (⭐ AGREGADO)
+  getChatRoom,     // GET /chat/rooms/:id
+  getUserChatRooms // GET /chat/user/:userId 
 };
