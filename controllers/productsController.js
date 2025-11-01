@@ -39,7 +39,7 @@ const getAllProductos = async (req, res) => { //Obtenemos todos los productos di
             include: [{
                 model: User,
                 as: 'user', // Debe coincidir con el alias definido en Products.associate
-                attributes: ['id', 'username', 'profileImage'] // Selecciona solo los campos que necesitas
+                attributes: ['id', 'username', 'profileImage', "country", "city"] // Selecciona solo los campos que necesitas
             }]
         }); //Buscamos todos los productos con la información del usuario.
         res.status(200).json(productos); //Enviamos los productos en la respuesta.
