@@ -18,35 +18,7 @@ const ChatRoom = require('./models/ChatRoom');
 const Message = require('./models/Message');
 const TradeAgreement = require('./models/TradeAgreement');
 
-// ======================= ASOCIACIONES =======================
-// Asociaciones de ChatRoom con User (dos veces, porque hay dos usuarios por sala)
-ChatRoom.belongsTo(User, { 
-  foreignKey: 'user1Id',  // Columna en chat_rooms que referencia a users.id
-  as: 'User1'             // Alias para usar en queries: include: { model: User, as: 'User1' }
-});
 
-ChatRoom.belongsTo(User, { 
-  foreignKey: 'user2Id',  // Columna para el segundo usuario
-  as: 'User2'             // Alias diferente para diferenciar ambos usuarios
-});
-
-// Asociación de ChatRoom con Products
-ChatRoom.belongsTo(Products, { 
-  foreignKey: 'productId', // Columna en chat_rooms que referencia a products.id
-  as: 'Product'            // Alias para usar en queries: include: { model: Products, as: 'Product' }
-});
-
-// Asociación de TradeAgreement con ChatRoom
-TradeAgreement.belongsTo(ChatRoom, {
-  foreignKey: 'chatRoomId', // Columna en trade_agreements que referencia a chat_rooms.id
-  as: 'ChatRoom'            // Alias para incluir datos de la sala
-});
-
-// Relación inversa: ChatRoom tiene un TradeAgreement
-ChatRoom.hasOne(TradeAgreement, {
-  foreignKey: 'chatRoomId',
-  as: 'TradeAgreement'
-});
 
 // ======================= INICIALIZACIÓN APP =======================
 const app = express();
