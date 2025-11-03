@@ -1,6 +1,5 @@
 const bcrypt = require('bcrypt'); //Importamos la librería bcrypt para encriptar contraseñas.
-const User = require("../models/User") //Importamos el modelo User para interactuar con la base de datos.
-const Products = require('../models/Products');
+const {User, Products, ProductOffer} = require("../models") //Importamos los modelos necesarios.
 const fs = require('fs'); //Importamos el módulo fs para manejar el sistema de archivos.
 const path = require('path'); //Importamos path para manejar rutas de archivos.
 
@@ -136,11 +135,11 @@ const deleteUser = async (req, res) => { //Eliminar la cuenta del usuario.
     productos.forEach(producto => { //Recorremos cada producto
       [producto.image1, producto.image2, producto.image3].forEach(img => { //Recorremos cada imagen del producto
         if (img) {
-          const fileName = require('path').basename(img); //Obtenemos el nombre del archivo de la imagen
-          const imgPath = require('path').join(__dirname, '..', 'uploads', 'products', fileName); //Construimos la ruta completa de la imagen
+          const fileName = path.basename(img);
+          const imgPath = path.join(__dirname, '..', 'uploads', 'products', fileName);
           try {
-            if (require('fs').existsSync(imgPath)) { //Verificamos si el archivo existe
-              require('fs').unlinkSync(imgPath); //Eliminamos el archivo de la imagen
+            if (fs.existsSync(imgPath)) {
+              fs.unlinkSync(imgPath);
             }
           } catch (err) {
             res.status(400).json({ err });
@@ -150,6 +149,25 @@ const deleteUser = async (req, res) => { //Eliminar la cuenta del usuario.
     });
 
     await Products.destroy({ where: { idUser: id } }); //Eliminamos todos los productos del usuario de la base de datos.
+
+    // Eliminar ofertas de productos del usuario y sus imágenes
+    const ofertas = await ProductOffer.findAll({ where: { idUser: id } });
+    ofertas.forEach(oferta => {
+      [oferta.img1, oferta.img2, oferta.img3].forEach(img => {
+        if (img) {
+          const fileName = path.basename(img);
+          const imgPath = path.join(__dirname, '..', 'uploads', 'productOffer', fileName);
+          try {
+            if (fs.existsSync(imgPath)) {
+              fs.unlinkSync(imgPath);
+            }
+          } catch (err) {
+            res.status(400).json({ err });
+          }
+        }
+      });
+    });
+    await ProductOffer.destroy({ where: { idUser: id } });
 
     // Eliminar imagen de perfil si existe
     if (user.profileImage) { //Si el usuario tiene una imagen de perfil

@@ -54,11 +54,4 @@ const User = sequelize.define('User', { //Definimos el modelo User con sus atrib
     timestamps: false //No usamos timestamps automáticos (createdAt, updatedAt)
 });
 
-User.associate = (models) => { //Definimos la relación entre User y Products (un usuario puede tener muchos productos)
-    User.hasMany(models.Products, { //Relación uno a muchos con el modelo Products
-        foreignKey: 'idUser', //Clave foránea en la tabla Products que referencia al usuario
-        as: 'products' //Alias para la relación
-    });
-};
-
 module.exports = User;

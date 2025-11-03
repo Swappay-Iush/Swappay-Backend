@@ -1,47 +1,134 @@
-const express = require('express'); //Importamos el framework Express para crear la aplicación web.
-const sequelize = require('./database'); //Importamos la configuración de la base de datos.
-const morgan = require('morgan'); //Importamos Morgan para registrar las solicitudes HTTP en la consola.
-const jwt = require('jsonwebtoken'); //Importamos la librería jsonwebtoken para manejar tokens JWT.
-const app = express(); //Creamos una instancia de la aplicación Express.
-const port = 3000; //Definimos el puerto en el que se ejecutará el servidor.
-const path = require('path'); //Módulo path para manejar rutas de archivos y directorios.
-const cors = require('cors'); //Importamos CORS para manejar solicitudes entre diferentes dominios.
-const cookieParser = require('cookie-parser'); //Importamos cookie-parser para manejar cookies en las solicitudes HTTP.
+// ======================= CONFIG =======================
+require('dotenv').config();
 
-app.use(cookieParser()); //Usamos el middleware cookie-parser para parsear las cookies en las solicitudes.
-app.use(cors({ //Configuramos CORS para permitir solicitudes desde el frontend.
-  origin: true, 
-  credentials: true
-}));
-app.use(morgan('dev')); //Usamos Morgan en modo 'dev' para registrar las solicitudes HTTP en la consola.
-app.use(express.json()); //Usamos el middleware integrado de Express para parsear JSON en las solicitudes.
-require('dotenv').config(); //Cargamos las variables de entorno desde el archivo .env
+// ======================= IMPORTS =======================
+const express = require('express');
+const path = require('path');
+const cors = require('cors');
+const cookieParser = require('cookie-parser');
+const morgan = require('morgan');
+const cron = require('node-cron');
+const { Op } = require('sequelize');
+const sequelize = require('./database');
 
-sequelize.sync() //Sincronizamos los modelos con la base de datos.
-    .then(() => { // Si la sincronización es exitosa, imprimimos un mensaje en la consola.
-        console.log("Modelos Sincronizados.")
+// ======================= MODELOS =======================
+const User = require('./models/User');
+const Products = require('./models/Products');
+const ChatRoom = require('./models/ChatRoom');
+const Message = require('./models/Message');
+const TradeAgreement = require('./models/TradeAgreement');
+
+
+
+// ======================= INICIALIZACIÓN APP =======================
+const app = express();
+const port = process.env.PORT || 3000;
+app.use(cookieParser());
+app.use(cors({ origin: true, credentials: true }));
+app.use(morgan('dev'));
+app.use(express.json());
+
+// ======================= SINCRONIZAR BASE DE DATOS =======================
+// Sincroniza modelos
+sequelize.sync()
+    .then(() => {
+        console.log("Modelos Sincronizados.");
     })
-    .catch(err => { // Si hay un error durante la sincronización, lo imprimimos en la consola.
-        console.error("Error al sincronizar los modelos.", err)
-    })
+    .catch(err => {
+        console.error("Error al sincronizar los modelos.", err);
+    });
 
-// Conectamos las rutas.
+// ======================= RUTAS =======================
 const userRoutes = require('./routes/userRoutes');
 const authRoutes = require('./routes/authRoutes');
 const verificationRoutes = require('./routes/verificationRoutes');
-const productRoutes = require('./routes/productsRoutes')
 
-// Usamos las rutas..
-app.use('/users', userRoutes); // Rutas para gestión de usuarios
-app.use('/auth', authRoutes); // Rutas para autenticación
-app.use('/verification', verificationRoutes); // Rutas para verificación de token
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // Servimos archivos estáticos desde la carpeta 'uploads'
-app.use('/products', productRoutes) // Rutas para productos
+const productRoutes = require('./routes/productsRoutes');
+const cartRoutes = require('./routes/cartRoutes');
+const productOfferRoutes = require('./routes/productOfferRoutes');
 
-app.get('/', (req, res) => { //Ruta raíz para verificar que el servidor está funcionando.
-    res.send("Hola desde la API de Swappay.")
-})
+const chatRoutes = require('./routes/chatRoutes');
+const tradeAgreementRoutes = require('./routes/tradeAgreementRoutes');
 
-app.listen(port, () => { //Iniciamos el servidor en el puerto definido.
-    console.log(`Servidor Funcionando en el puerto: ${port}`);
-})
+
+
+app.use('/users', userRoutes);
+app.use('/auth', authRoutes);
+app.use('/verification', verificationRoutes);
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/products', productRoutes);
+app.use('/carrito', cartRoutes);
+app.use('/product-offer', productOfferRoutes);
+
+app.use('/chat', chatRoutes);
+app.use('/chat/trade', tradeAgreementRoutes);
+
+app.get('/', (req, res) => {
+    res.send("Hola desde la API de Swappay.");
+});
+
+// ======================= SOCKET.IO CHAT =======================
+const httpServer = require('http').createServer(app);
+const io = require('socket.io')(httpServer, { cors: { origin: true, credentials: true } });
+
+// Hacer io accesible desde los controladores
+app.set('io', io);
+
+io.on('connection', (socket) => {
+    console.log('Usuario conectado:', socket.id);
+
+
+    socket.on('joinRoom', ({ chatRoomId }) => {
+        socket.join(`chat_${chatRoomId}`);
+        console.log(`Socket ${socket.id} se unió a sala chat_${chatRoomId}`);
+    });
+
+
+    // ======================= EVENTO: sendMessage =======================
+    socket.on('sendMessage', async ({ chatRoomId, senderId, content, user1Id, user2Id }) => {
+        try {
+            // Si la sala no existe, créala (requiere user1Id y user2Id)
+            let chatRoom = await ChatRoom.findByPk(chatRoomId);
+            if (!chatRoom && user1Id && user2Id) {
+                chatRoom = await ChatRoom.create({ id: chatRoomId, user1Id, user2Id });
+            }
+
+            // Guardar el mensaje en la base de datos
+            await Message.create({ chatRoomId, senderId, content });
+
+            // Emitir el mensaje a todos los sockets en la sala chat_{chatRoomId}
+            io.to(`chat_${chatRoomId}`).emit('newMessage', { chatRoomId, senderId, content });
+        } catch (err) {
+            console.error('Error en sendMessage:', err);
+        }
+    });
+});
+
+// ======================= TAREA PROGRAMADA: BORRAR MENSAJES VIEJOS =======================
+
+cron.schedule('0 * * * *', async () => {
+    try {
+        // Calcula la fecha límite: hace 1 hora desde ahora
+        const limite = new Date(Date.now() - 1 * 60 * 60 * 1000); // 1 hora en milisegundos
+        
+        // Elimina todos los mensajes creados antes de la fecha límite
+        const eliminados = await Message.destroy({
+            where: {
+                createdAt: { [Op.lt]: limite } // Op.lt = "less than" (menor que)
+            }
+        });
+        
+        // Log solo si se eliminaron mensajes
+        if (eliminados > 0) {
+            console.log(`Mensajes eliminados automáticamente: ${eliminados}`);
+        }
+    } catch (err) {
+        console.error('Error eliminando mensajes automáticamente:', err);
+    }
+});
+
+// ======================= INICIAR SERVIDOR =======================
+
+httpServer.listen(port, () => {
+    console.log(`Servidor y Socket.IO funcionando en puerto ${port}`);
+});

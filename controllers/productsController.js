@@ -1,8 +1,6 @@
-const Products = require("../models/Products") //Importamos el modelo User para interactuar con la base de datos.
-const User = require('../models/User') //Importamos el modelo User para las asociaciones.
+const {User, Products} = require("../models") //Importamos el modelo User y Products.
 const fs = require('fs'); //Importamos el módulo fs para manejar el sistema de archivos.
 const path = require('path'); //Importamos path para manejar rutas de archivos.
-
 
 const createProducts = async(req, res) =>  { //Creamos un producto nuevo.
     // Obtenemos los datos del producto desde el cuerpo de la solicitud
@@ -37,7 +35,13 @@ const createProducts = async(req, res) =>  { //Creamos un producto nuevo.
 
 const getAllProductos = async (req, res) => { //Obtenemos todos los productos disponibles.
     try {
-        const productos = await Products.findAll(); //Buscamos todos los productos en la base de datos.
+        const productos = await Products.findAll({
+            include: [{
+                model: User,
+                as: 'user', // Debe coincidir con el alias definido en Products.associate
+                attributes: ['id', 'username', 'profileImage', "country", "city"] // Selecciona solo los campos que necesitas
+            }]
+        }); //Buscamos todos los productos con la información del usuario.
         res.status(200).json(productos); //Enviamos los productos en la respuesta.
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -62,6 +66,47 @@ const getProductsByUser = async (req, res) => { //Obtenemos los productos de un 
     res.status(500).json({ error: error.message });
   }
 };
+
+const updateProduct = async (req, res) => {
+    const { id } = req.params; // ID del producto a actualizar
+    const {
+        title, description, category, condition, amount,
+        interests, priceSwapcoins, additionalNotes, ubication, deliveryMethod
+    } = req.body;
+
+    // Obtén las rutas de las imágenes subidas (si hay nuevas)
+    const image1 = req.files?.image1 ? `/uploads/products/${req.files.image1[0].filename}` : undefined;
+    const image2 = req.files?.image2 ? `/uploads/products/${req.files.image2[0].filename}` : undefined;
+    const image3 = req.files?.image3 ? `/uploads/products/${req.files.image3[0].filename}` : undefined;
+
+    try {
+        const producto = await Products.findByPk(id);
+        if (!producto) {
+            return res.status(404).json({ error: "Producto no encontrado." });
+        }
+
+        // Actualiza solo los campos enviados
+        await producto.update({
+            title: title ?? producto.title,
+            description: description ?? producto.description,
+            category: category ?? producto.category,
+            condition: condition ?? producto.condition,
+            amount: amount ?? producto.amount,
+            interests: interests ?? producto.interests,
+            priceSwapcoins: priceSwapcoins ?? producto.priceSwapcoins,
+            additionalNotes: additionalNotes ?? producto.additionalNotes,
+            ubication: ubication ?? producto.ubication,
+            deliveryMethod: deliveryMethod ?? producto.deliveryMethod,
+            image1: image1 ?? producto.image1,
+            image2: image2 ?? producto.image2,
+            image3: image3 ?? producto.image3
+        });
+
+        res.status(200).json({ message: "Producto actualizado correctamente.", producto });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+}
 
 const deleteProduct = async(req,res) => { //Eliminamos un producto por su ID.
     const {id} = req.params; //Obtenemos el ID del producto desde los parámetros de la ruta.
@@ -97,5 +142,6 @@ module.exports = { //Exportamos las funciones para usarlas en las rutas.
     createProducts,
     getAllProductos,
     getProductsByUser,
+    updateProduct,
     deleteProduct
 }

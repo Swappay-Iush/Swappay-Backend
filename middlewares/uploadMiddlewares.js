@@ -31,13 +31,21 @@ const uploadProfile = multer({ // Configuramos Multer para imágenes de perfil
   fileFilter  // Usamos el filtro definido arriba
 });
 
+
 // Middleware para imágenes de productos
 const uploadProduct = multer({ // Configuramos Multer para imágenes de productos
   storage: getStorage('uploads/products/', 'product'), // Carpeta 'uploads/products/' y prefijo 'product'
   fileFilter // Usamos el filtro definido arriba
 });
 
+// Middleware para imágenes de ofertas de productos
+const uploadProductOffer = multer({ // Configuramos Multer para imágenes de ofertas de productos
+  storage: getStorage('uploads/productOffer/', 'productOffer'), // Carpeta 'uploads/productOffer/' y prefijo 'productOffer'
+  fileFilter // Usamos el filtro definido arriba
+});
+
 module.exports = {
   uploadProfile,
-  uploadProduct
+  uploadProduct,
+  uploadProductOffer
 };
