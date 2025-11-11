@@ -33,4 +33,19 @@ router.get('/status/:chatRoomId', tradeController.getTradeStatus);
  */
 router.post('/reset', tradeController.resetTrade);
 
+// ======================= GET: Todos los acuerdos =======================
+/**
+ * GET /chat/trade/all
+ * Descripción: Devuelve todos los acuerdos de intercambio existentes
+ */
+router.post('/messages/:id', tradeController.updateMessagesInfo);
+router.get('/all', tradeController.getAllTrades);
+
+// ======================= DELETE: Eliminar Acuerdo =======================
+/**
+ * DELETE /chat/trade/:chatRoomId
+ * Descripción: Elimina el acuerdo de intercambio según el chatRoomId
+ */
+router.delete('/:chatRoomId', tradeController.deleteTrade);
+
 module.exports = router;

@@ -33,3 +33,8 @@ const ChatRoom = sequelize.define('ChatRoom', {
 });
 
 module.exports = ChatRoom;
+
+// Asociaciones con User para poder incluir los datos en los includes
+const User = require('./User');
+ChatRoom.belongsTo(User, { foreignKey: 'user1Id', as: 'user1' });
+ChatRoom.belongsTo(User, { foreignKey: 'user2Id', as: 'user2' });

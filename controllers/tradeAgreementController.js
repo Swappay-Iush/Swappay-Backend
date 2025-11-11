@@ -7,6 +7,7 @@
 
 const TradeAgreement = require('../models/TradeAgreement');
 const ChatRoom = require('../models/ChatRoom');
+const User = require('../models/User');
 
 // ======================= FUNCIÓN: ACEPTAR/RECHAZAR INTERCAMBIO =======================
 /**
@@ -149,6 +150,7 @@ const getTradeStatus = async (req, res) => {
         user1Accepted: false,
         user2Accepted: false,
         tradeCompleted: 'pendiente',
+        messagesInfo: "En negociación",
         completedAt: null,
         message: 'Aún no se ha iniciado el proceso de aceptación.'
       });
@@ -162,6 +164,7 @@ const getTradeStatus = async (req, res) => {
       user2Accepted: tradeAgreement.user2Accepted,
       tradeCompleted: tradeAgreement.tradeCompleted,
       completedAt: tradeAgreement.completedAt,
+      messagesInfo: tradeAgreement.messagesInfo,
       createdAt: tradeAgreement.createdAt,
       updatedAt: tradeAgreement.updatedAt
     });
@@ -218,8 +221,105 @@ const resetTrade = async (req, res) => {
 };
 
 // ======================= EXPORTACIONES =======================
+/**
+ * Endpoint: GET /chat/trade/all
+ * Descripción: Devuelve todos los acuerdos de intercambio existentes.
+ * Respuesta: Array de acuerdos
+ */
+const getAllTrades = async (req, res) => {
+  try {
+    // Incluye la sala de chat y los usuarios relacionados
+    const tradeAgreements = await TradeAgreement.findAll({
+      include: [
+        {
+          model: ChatRoom,
+          as: 'chatRoom',
+          attributes: ['id', 'user1Id', 'user2Id'],
+          include: [
+            {
+              model: User,
+              as: 'user1',
+              attributes: ['id', 'email', 'username', 'address']
+            },
+            {
+              model: User,
+              as: 'user2',
+              attributes: ['id', 'email', 'username', 'address']
+            }
+          ]
+        }
+      ]
+    });
+    return res.status(200).json(tradeAgreements);
+  } catch (error) {
+    console.error('Error al obtener todos los acuerdos de intercambio:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+// ======================= FUNCIÓN: ACTUALIZAR MENSAJES INFO =======================
+/**
+ * Endpoint: POST /chat/trade/messages
+ * Body esperado: { chatRoomId, messagesInfo }
+ * Descripción: Actualiza el array de mensajesInfo para el acuerdo de intercambio.
+ * Respuesta: { message, messagesInfo }
+ */
+const updateMessagesInfo = async (req, res) => {
+  const { id: chatRoomId } = req.params;
+  const { messagesInfo } = req.body;
+  if (!chatRoomId || !Array.isArray(messagesInfo)) {
+    return res.status(400).json({ message: 'Se requiere chatRoomId y un array de messagesInfo.' });
+  }
+  try {
+    const tradeAgreement = await TradeAgreement.findOne({ where: { chatRoomId } });
+    if (!tradeAgreement) {
+      return res.status(404).json({ message: 'No existe acuerdo de intercambio para esta sala.' });
+    }
+    // Acumular mensajes sin duplicados
+    const prevMessages = Array.isArray(tradeAgreement.messagesInfo) ? tradeAgreement.messagesInfo : [];
+    const newMessages = messagesInfo.filter(msg => !prevMessages.includes(msg));
+    tradeAgreement.messagesInfo = [...prevMessages, ...newMessages];
+    await tradeAgreement.save();
+    return res.status(200).json({
+      message: 'Mensajes actualizados correctamente.',
+      messagesInfo: tradeAgreement.messagesInfo
+    });
+  } catch (error) {
+    console.error('Error al actualizar messagesInfo:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+// ======================= FUNCIÓN: ELIMINAR ACUERDO DE INTERCAMBIO =======================
+/**
+ * Endpoint: DELETE /chat/trade/:chatRoomId
+ * Descripción: Elimina el acuerdo de intercambio según el chatRoomId.
+ * Params: chatRoomId
+ * Respuesta: { message }
+ */
+const deleteTrade = async (req, res) => {
+  const { chatRoomId } = req.params;
+  if (!chatRoomId) {
+    return res.status(400).json({ message: 'Se requiere chatRoomId.' });
+  }
+  try {
+    const tradeAgreement = await TradeAgreement.findOne({ where: { chatRoomId } });
+    if (!tradeAgreement) {
+      return res.status(404).json({ message: 'No existe acuerdo de intercambio para esta sala.' });
+    }
+    await tradeAgreement.destroy();
+    return res.status(200).json({ message: 'Acuerdo de intercambio eliminado correctamente.' });
+  } catch (error) {
+    console.error('Error al eliminar acuerdo de intercambio:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   acceptTrade,      // POST /chat/trade/accept
   getTradeStatus,   // GET /chat/trade/status/:chatRoomId
-  resetTrade        // POST /chat/trade/reset
+  resetTrade,       // POST /chat/trade/reset
+  getAllTrades,      // GET /chat/trade/all
+  updateMessagesInfo, 
+  deleteTrade // DELETE /chat/trade/:chatRoomId
 };
