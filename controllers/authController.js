@@ -18,11 +18,11 @@ const loginUser = async (req, res) => { //Inicio de sesión del usuario.
     const token = jwt.sign( // Generamos un token JWT con la información del usuario.
       { id: user.id, email: user.email, rol: user.rol }, process.env.SECRET_JWT_SWAP, { expiresIn: '1h' }); //El token expira en 1 hora.
     res
-      .cookie('access_token', token, { //Almacenamos el token en una cookie HTTP-only.
-        httpOnly: true, //La cookie no es accesible desde JavaScript del lado del cliente.
-        secure: process.env.NODE_ENV === 'production', //La cookie solo se envía por HTTPS en producción.
-        sameSite: 'strict', //La cookie solo se envía en solicitudes del mismo sitio.
-        maxAge: 1000*60*60 //La cookie expira en 1 hora.
+      .cookie('access_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', 
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', 
+        maxAge: 1000 * 60 * 60,
       })
       .json({ //Enviamos una respuesta con los datos del usuario (sin la contraseña).
         username: user.username, //Nombre de usuario

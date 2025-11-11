@@ -1,22 +1,30 @@
-const {Sequelize} = require('sequelize'); //Creamos el objeto sequelize 
+const { Sequelize } = require('sequelize');
 
-const sequelize = new Sequelize( //Se crea una instancia de Sequelize con los datos de conexión a la base de datos.
-    'BackendSwappay', //Nombre de la DB a la que se conecta
-    'root', //Usuario
-    'arredondo11', //Contraseña
+let sequelize;
+
+if (process.env.DATABASE_URL) {
+  // En producción (Railway) tomará la URL desde Variables
+  sequelize = new Sequelize(process.env.DATABASE_URL, {
+    dialect: 'mysql',
+    logging: false,
+  });
+} else {
+  // Modo local con tu config anterior
+  sequelize = new Sequelize(
+    'BackendSwappay',  // DB local
+    'root',            // usuario local
+    'arredondo13',     // contraseña local
     {
-        host: 'localhost', //Dirección del servidor donde está la base de datos 
-        dialect: 'mysql' //Dialecto con el que habla la DB.
+      host: 'localhost',
+      dialect: 'mysql',
+      logging: false,
     }
-)
+  );
+}
 
-//Llamamos el objeto para que intente autenticarse con la información antes suministrada.
-sequelize.authenticate() //Si se logra autenticar, se imprime el then, si no, el catch.
-    .then(()=> {
-        console.log("Conexión establecida.")
-    })
-    .catch(err => {
-        console.error("No se completo la conexión", err)
-    })
+sequelize.authenticate()
+  .then(() => console.log('Conexión establecida.'))
+  .catch((err) => console.error('No se completó la conexión', err));
 
-    module.exports = sequelize; //Exportamos la instancia.
+module.exports = sequelize;
+

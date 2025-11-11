@@ -6,7 +6,7 @@ const ProductOffer = sequelize.define('ProductOffer', {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'Users',
+      model: 'users',
       key: 'id',
     },
     onUpdate: 'CASCADE',
