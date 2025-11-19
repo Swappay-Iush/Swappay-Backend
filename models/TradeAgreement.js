@@ -75,9 +75,16 @@ const TradeAgreement = sequelize.define('TradeAgreement', {
    * Se actualiza automáticamente según los estados de aceptación
    */
   tradeCompleted: {
-    type: DataTypes.ENUM('pendiente', 'en_proceso'),
+    type: DataTypes.ENUM("pendiente", "en_proceso", "completado"),
     allowNull: false,
     defaultValue: 'pendiente',
+  },
+
+
+  messagesInfo: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: ["En negociación"]
   },
   
   // ======================= COLUMNA: completedAt =======================
@@ -121,3 +128,17 @@ const TradeAgreement = sequelize.define('TradeAgreement', {
 });
 
 module.exports = TradeAgreement;
+
+// ======================= ASOCIACIONES =======================
+const ChatRoom = require('./ChatRoom');
+const User = require('./User');
+
+// Un TradeAgreement pertenece a una sala de chat
+TradeAgreement.belongsTo(ChatRoom, {
+  foreignKey: 'chatRoomId',
+  as: 'chatRoom'
+});
+
+// Para el include de usuarios en ChatRoom (si no está en ChatRoom.js, debe agregarse allí):
+// ChatRoom.belongsTo(User, { foreignKey: 'user1Id', as: 'user1' });
+// ChatRoom.belongsTo(User, { foreignKey: 'user2Id', as: 'user2' });

@@ -19,38 +19,39 @@ const { Op } = require('sequelize');
 const createRoom = async (req, res) => {
   // Extrae los datos del cuerpo de la petición
   const { user1Id, user2Id, productId } = req.body;
-  
+
   // Validación: verifica que todos los campos requeridos estén presentes
   if (!user1Id || !user2Id || !productId) {
     return res.status(400).json({ message: 'Faltan datos requeridos.' });
   }
-  
+
   try {
     // Validar que los usuarios existan en la base de datos
     const user1 = await User.findByPk(user1Id);
     const user2 = await User.findByPk(user2Id);
     const product = await Products.findByPk(productId);
-    
+
     // Si alguno no existe, retorna error 404
     if (!user1 || !user2 || !product) {
       return res.status(404).json({ message: 'Usuario o producto no encontrado.' });
     }
-    
+
     // Buscar si ya existe una sala con esta combinación exacta
     // Esto evita crear salas duplicadas para el mismo par de usuarios y producto
     let chatRoom = await ChatRoom.findOne({
       where: {
-        user1Id,
-        user2Id,
-        productId
+        [Op.or]: [
+          { user1Id, user2Id },
+          { user1Id: user2Id, user2Id: user1Id }
+        ]
       }
     });
-    
+
     // Si no existe, crear una nueva sala
     if (!chatRoom) {
       chatRoom = await ChatRoom.create({ user1Id, user2Id, productId });
     }
-    
+
     // Retorna la sala (nueva o existente) con código 201 (Created)
     return res.status(201).json({
       chatRoomId: chatRoom.id,
@@ -68,7 +69,7 @@ const createRoom = async (req, res) => {
 const getChatRoom = async (req, res) => {
   // Extrae el ID de la sala desde los parámetros de la URL
   const { id } = req.params;
-  
+
   try {
     // Busca la sala por Primary Key e incluye datos relacionados
     const chatRoom = await ChatRoom.findByPk(id, {
@@ -92,12 +93,12 @@ const getChatRoom = async (req, res) => {
         }
       ]
     });
-    
+
     // Si no se encuentra la sala, retorna error 404
     if (!chatRoom) {
       return res.status(404).json({ message: 'Sala de chat no encontrada.' });
     }
-    
+
     // Retorna la sala con todos los datos relacionados
     res.status(200).json(chatRoom);
   } catch (error) {
@@ -111,7 +112,7 @@ const getChatRoom = async (req, res) => {
 const getUserChatRooms = async (req, res) => {
   // Extrae el userId de los parámetros de la URL
   const { userId } = req.params;
-  
+
   try {
     // Busca todas las salas donde el usuario participe
     const chatRooms = await ChatRoom.findAll({
@@ -137,7 +138,7 @@ const getUserChatRooms = async (req, res) => {
         },
       ]
     });
-    
+
     // Retorna el array de salas (puede estar vacío si el usuario no tiene salas)
     res.status(200).json(chatRooms);
   } catch (error) {
@@ -152,14 +153,14 @@ const getUserChatRooms = async (req, res) => {
 const getMessages = async (req, res) => {
   // Extrae el chatRoomId de los parámetros de la URL
   const { chatRoomId } = req.params;
-  
+
   try {
     // Busca todos los mensajes de la sala ordenados por fecha de creación
     const messages = await Message.findAll({
       where: { chatRoomId }, // Filtra por ID de sala
       order: [['createdAt', 'ASC']] // Ordena de más antiguo a más reciente (ASC = Ascendente)
     });
-    
+
     // Retorna el array de mensajes (puede estar vacío si no hay mensajes)
     res.status(200).json(messages);
   } catch (error) {
