@@ -40,9 +40,10 @@ const createRoom = async (req, res) => {
     // Esto evita crear salas duplicadas para el mismo par de usuarios y producto
     let chatRoom = await ChatRoom.findOne({
       where: {
-        user1Id,
-        user2Id,
-        productId
+        [Op.or]: [
+          { user1Id, user2Id },
+          { user1Id: user2Id, user2Id: user1Id }
+        ]
       }
     });
 

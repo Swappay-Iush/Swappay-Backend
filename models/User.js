@@ -20,7 +20,7 @@ const User = sequelize.define('User', { //Definimos el modelo User con sus atrib
         allowNull: false
     },
     rol: { //Rol del usuario (puede ser 'user' o 'admin')
-        type: DataTypes.ENUM('user', 'admin'),
+        type: DataTypes.ENUM('user', 'admin', "collaborator"),
         allowNull: false,
         defaultValue: 'user'
     },
