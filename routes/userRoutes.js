@@ -33,8 +33,4 @@ router.delete('/:id/profile-image', userController.deleteProfileImage);
 // Obtener balance de Swappcoins
 router.get('/:id/swappcoins', userController.getSwappcoinsBalance);
 
-// RUTA TEMPORAL: Migración de recompensas de perfil completo
-// ⚠️ ELIMINAR DESPUÉS DE EJECUTAR UNA VEZ EN PRODUCCIÓN
-router.post('/migrate/profile-rewards', userController.migrateProfileRewards);
-
 module.exports = router; //Exportamos el router para usarlo en otros archivos, como en index.js.
