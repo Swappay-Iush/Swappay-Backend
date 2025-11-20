@@ -376,77 +376,6 @@ const resetPassword = async (req, res) => {
 
 
 
-// Migración: Otorgar recompensa de perfil completo a usuarios existentes
-const migrateProfileRewards = async (req, res) => {
-  try {
-    console.log('🔍 Iniciando migración de recompensas de perfil completo...');
-
-    // Buscar usuarios con perfil completo que no han recibido la recompensa
-    const users = await User.findAll({
-      where: {
-        profileCompletedReward: false // Solo usuarios que no han recibido el bono
-      }
-    });
-
-    console.log(`📊 Total de usuarios encontrados: ${users.length}`);
-
-    let updatedCount = 0;
-    let alreadyCompleteCount = 0;
-    const updatedUsers = [];
-
-    // Procesar cada usuario
-    for (const user of users) {
-      // Verificar si el perfil está completo
-      const isProfileComplete = user.city && 
-                                user.phone && 
-                                user.address && 
-                                user.gender && 
-                                user.dateBirth;
-
-      if (isProfileComplete) {
-        const oldBalance = user.swappcoins;
-        // Otorgar recompensa
-        user.swappcoins += 200;
-        user.profileCompletedReward = true;
-        await user.save();
-
-        updatedCount++;
-        updatedUsers.push({
-          id: user.id,
-          username: user.username,
-          oldBalance,
-          newBalance: user.swappcoins
-        });
-        console.log(`✅ Usuario ID ${user.id} (${user.username}): +200 SwappCoins otorgados. Nuevo saldo: ${user.swappcoins}`);
-      } else {
-        alreadyCompleteCount++;
-      }
-    }
-
-    console.log('✅ Migración completada exitosamente.');
-
-    res.status(200).json({
-      success: true,
-      message: 'Migración completada exitosamente',
-      summary: {
-        totalProcessed: users.length,
-        usersUpdated: updatedCount,
-        usersIncomplete: alreadyCompleteCount
-      },
-      updatedUsers
-    });
-
-  } catch (error) {
-    console.error('❌ Error durante la migración:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Error durante la migración',
-      details: error.message 
-    });
-  }
-};
-
-
 module.exports = { //Exportamos las funciones para usarlas en las rutas
   createUser,
   countries,
@@ -458,6 +387,5 @@ module.exports = { //Exportamos las funciones para usarlas en las rutas
   getAllUsers,
   resetPassword,
   deleteUserByAdmin,
-  getSwappcoinsBalance,
-  migrateProfileRewards
+  getSwappcoinsBalance
 }
