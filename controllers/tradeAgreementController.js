@@ -73,6 +73,39 @@ const acceptTrade = async (req, res) => {
     // 5. Guardar (el hook beforeSave actualizará tradeCompleted automáticamente)
     await tradeAgreement.save();
     
+    // 5.1. Si el intercambio se completó, dar recompensas de Swappcoins
+    if (tradeAgreement.tradeCompleted === 'en_proceso') {
+      // Obtener ambos usuarios
+      const user1 = await User.findByPk(chatRoom.user1Id);
+      const user2 = await User.findByPk(chatRoom.user2Id);
+      
+      // Incrementar contador de intercambios completados
+      user1.completedTrades += 1;
+      user2.completedTrades += 1;
+      
+      // RECOMPENSAS POR INTERCAMBIOS
+      
+      // Primer intercambio → +500 swappcoins
+      if (user1.completedTrades === 1) {
+        user1.swappcoins += 500;
+      }
+      if (user2.completedTrades === 1) {
+        user2.swappcoins += 500;
+      }
+      
+      // Tercer intercambio → +2000 swappcoins
+      if (user1.completedTrades === 3) {
+        user1.swappcoins += 2000;
+      }
+      if (user2.completedTrades === 3) {
+        user2.swappcoins += 2000;
+      }
+      
+      // Guardar cambios en ambos usuarios
+      await user1.save();
+      await user2.save();
+    }
+    
     // 6. Emitir evento Socket.IO para actualización en tiempo real
     const io = req.app.get('io');
     if (io) {
