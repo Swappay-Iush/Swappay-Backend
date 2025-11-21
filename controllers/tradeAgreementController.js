@@ -41,6 +41,16 @@ const checkAndMarkAsComplete = async (tradeAgreement, chatRoomId, req) => {
   if (lastMsgNormalized === 'intercambio exitoso' && tradeAgreement.tradeCompleted === 'en_proceso') {
     console.log('[checkAndMarkAsComplete] ✅✅✅ CONDICIONES CUMPLIDAS - Marcando como completado...');
 
+    // VERIFICACIÓN CRÍTICA: Recargar desde BD para asegurar que NO se está ejecutando en paralelo
+    console.log('[checkAndMarkAsComplete] ⚠️ Recargar desde BD para verificar estado actual (prevenir race condition)...');
+    const freshTrade = await TradeAgreement.findOne({ where: { chatRoomId } });
+    
+    // Si ya está completado en BD, no hacer nada (previene duplicados por race condition)
+    if (freshTrade.tradeCompleted === 'completado') {
+      console.log('[checkAndMarkAsComplete] ⚠️ YA ESTÁ COMPLETADO EN BD - Previniendo ejecución duplicada (race condition detectada)');
+      return;
+    }
+
     // Log del valor exacto que vamos a guardar
     const valueToSave = 'completado';
     console.log('[checkAndMarkAsComplete] Valor exacto a guardar:', JSON.stringify(valueToSave));
@@ -63,17 +73,35 @@ const checkAndMarkAsComplete = async (tradeAgreement, chatRoomId, req) => {
 
       if (user1 && user2) {
         console.log('[checkAndMarkAsComplete] Otorgando recompensas a usuarios:', user1.id, user2.id);
+        // ANTES DE OTORGAR RECOMPENSAS: Verificar si ya fueron otorgadas
+        const previousCompletedTrades1 = user1.completedTrades;
+        const previousCompletedTrades2 = user2.completedTrades;
+        
         // Incrementar contador de intercambios completados
         user1.completedTrades += 1;
         user2.completedTrades += 1;
+        
+        console.log('[checkAndMarkAsComplete] Contador antes:', previousCompletedTrades1, 'Contador después:', user1.completedTrades);
 
         // Primer intercambio → +500 swappcoins
-        if (user1.completedTrades === 1) user1.swappcoins += 500;
-        if (user2.completedTrades === 1) user2.swappcoins += 500;
+        if (user1.completedTrades === 1) {
+          console.log('[checkAndMarkAsComplete] 🎁 Usuario 1: Primer intercambio completado, otorgando +500');
+          user1.swappcoins += 500;
+        }
+        if (user2.completedTrades === 1) {
+          console.log('[checkAndMarkAsComplete] 🎁 Usuario 2: Primer intercambio completado, otorgando +500');
+          user2.swappcoins += 500;
+        }
 
         // Tercer intercambio → +2000 swappcoins
-        if (user1.completedTrades === 3) user1.swappcoins += 2000;
-        if (user2.completedTrades === 3) user2.swappcoins += 2000;
+        if (user1.completedTrades === 3) {
+          console.log('[checkAndMarkAsComplete] 🎁 Usuario 1: Tercer intercambio completado, otorgando +2000');
+          user1.swappcoins += 2000;
+        }
+        if (user2.completedTrades === 3) {
+          console.log('[checkAndMarkAsComplete] 🎁 Usuario 2: Tercer intercambio completado, otorgando +2000');
+          user2.swappcoins += 2000;
+        }
 
         await user1.save();
         await user2.save();
