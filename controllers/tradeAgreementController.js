@@ -294,18 +294,50 @@ const updateMessagesInfo = async (req, res) => {
     // Guardar primero el array de mensajes
     await tradeAgreement.save();
 
+    // Logs para depuración
+    console.log('updateMessagesInfo - chatRoomId:', chatRoomId);
+    console.log('updateMessagesInfo - prevMessages:', prevMessages);
+    console.log('updateMessagesInfo - incoming messagesInfo:', messagesInfo);
+    console.log('updateMessagesInfo - newMessages filtered:', newMessages);
+    console.log('updateMessagesInfo - stored messagesInfo:', tradeAgreement.messagesInfo);
+
     // Verificar si la última entrada indica intercambio exitoso
     const msgs = Array.isArray(tradeAgreement.messagesInfo) ? tradeAgreement.messagesInfo : [];
     const lastMsg = msgs.length ? msgs[msgs.length - 1] : null;
 
-    // Si el último mensaje es 'Intercambio exitoso' y el acuerdo está en 'en_proceso',
+    // Normalizar y comparar de forma robusta
+    const lastMsgNormalized = typeof lastMsg === 'string' ? lastMsg.trim().toLowerCase() : null;
+    console.log('updateMessagesInfo - lastMsg:', lastMsg, 'normalized:', lastMsgNormalized);
+
+    // Si el último mensaje es 'intercambio exitoso' y el acuerdo está en 'en_proceso',
     // marcar como completado y otorgar recompensas una sola vez.
-    if (lastMsg === 'Intercambio exitoso' && tradeAgreement.tradeCompleted === 'en_proceso') {
+    if (lastMsgNormalized === 'intercambio exitoso' && tradeAgreement.tradeCompleted === 'en_proceso') {
       console.log('Intercambio exitoso detectado para chatRoomId:', chatRoomId);
       // Marcar acuerdo como completado
       tradeAgreement.tradeCompleted = 'completado';
       tradeAgreement.completedAt = new Date();
       await tradeAgreement.save();
+
+      // Emitir evento para notificar a ambos clientes que el intercambio pasó a completado
+      try {
+        const io = req.app.get('io');
+        if (io) {
+          // Obtener ids de participantes si están disponibles
+          const chatRoomForEmit = await ChatRoom.findByPk(chatRoomId);
+          io.to(`chat_${chatRoomId}`).emit('tradeStatusUpdated', {
+            chatRoomId: tradeAgreement.chatRoomId,
+            user1Accepted: tradeAgreement.user1Accepted,
+            user2Accepted: tradeAgreement.user2Accepted,
+            tradeCompleted: tradeAgreement.tradeCompleted,
+            completedAt: tradeAgreement.completedAt,
+            user1Id: chatRoomForEmit ? chatRoomForEmit.user1Id : null,
+            user2Id: chatRoomForEmit ? chatRoomForEmit.user2Id : null
+          });
+          console.log('Evento tradeStatusUpdated emitido por updateMessagesInfo para completado');
+        }
+      } catch (emitErr) {
+        console.error('Error al emitir evento tradeStatusUpdated desde updateMessagesInfo:', emitErr);
+      }
 
       // Obtener sala para identificar usuarios
       const chatRoom = await ChatRoom.findByPk(chatRoomId);
