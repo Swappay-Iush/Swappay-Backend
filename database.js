@@ -13,7 +13,7 @@ if (process.env.DATABASE_URL) {
   sequelize = new Sequelize(
     'BackendSwappay',  // DB local
     'root',            // usuario local
-    'contraseña',     // contraseña local
+    'arredondo13',     // contraseña local
     {
       host: 'localhost',
       dialect: 'mysql',
