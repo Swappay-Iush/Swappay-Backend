@@ -82,19 +82,20 @@ const acceptTrade = async (req, res) => {
     // 6. Emitir evento Socket.IO para actualización en tiempo real
     const io = req.app.get('io');
     if (io) {
-      io.to(`chat_${chatRoomId}`).emit('tradeStatusUpdated', {
+      // Incluimos los identificadores de los participantes y el actor
+      // para que el cliente pueda construir mensajes personalizados.
+      const eventData = {
         chatRoomId: tradeAgreement.chatRoomId,
         user1Accepted: tradeAgreement.user1Accepted,
         user2Accepted: tradeAgreement.user2Accepted,
         tradeCompleted: tradeAgreement.tradeCompleted,
-        currentUserAccepted: isUser1 ? tradeAgreement.user1Accepted : tradeAgreement.user2Accepted,
-        otherUserAccepted: isUser1 ? tradeAgreement.user2Accepted : tradeAgreement.user1Accepted,
         completedAt: tradeAgreement.completedAt,
-        message: tradeAgreement.tradeCompleted === 'en_proceso' 
-          ? 'Ambos usuarios han aceptado el intercambio' 
-          : 'Aceptación actualizada'
-      });
-      console.log(`📡 Evento tradeStatusUpdated emitido a sala chat_${chatRoomId}`);
+        user1Id: chatRoom.user1Id,
+        user2Id: chatRoom.user2Id,
+        actorId: parseInt(userId)
+      };
+      io.to(`chat_${chatRoomId}`).emit('tradeStatusUpdated', eventData);
+      console.log(`📡 Evento tradeStatusUpdated emitido a sala chat_${chatRoomId}`, eventData);
     }
     
     // 7. Preparar respuesta con mensajes descriptivos
@@ -161,8 +162,11 @@ const getTradeStatus = async (req, res) => {
         message: 'Aún no se ha iniciado el proceso de aceptación.'
       });
     }
-    
-    // Si existe, devolver el estado actual
+
+    // Obtener información de la sala para incluir user1Id/user2Id
+    const chatRoom = await ChatRoom.findByPk(chatRoomId);
+
+    // Si existe, devolver el estado actual incluyendo ids de participantes
     return res.status(200).json({
       exists: true,
       chatRoomId: tradeAgreement.chatRoomId,
@@ -171,6 +175,8 @@ const getTradeStatus = async (req, res) => {
       tradeCompleted: tradeAgreement.tradeCompleted,
       completedAt: tradeAgreement.completedAt,
       messagesInfo: tradeAgreement.messagesInfo,
+      user1Id: chatRoom ? chatRoom.user1Id : null,
+      user2Id: chatRoom ? chatRoom.user2Id : null,
       createdAt: tradeAgreement.createdAt,
       updatedAt: tradeAgreement.updatedAt
     });
