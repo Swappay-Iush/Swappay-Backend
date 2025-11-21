@@ -73,38 +73,11 @@ const acceptTrade = async (req, res) => {
     // 5. Guardar (el hook beforeSave actualizará tradeCompleted automáticamente)
     await tradeAgreement.save();
     
-    // 5.1. Si el intercambio se completó, dar recompensas de Swappcoins
-    if (tradeAgreement.tradeCompleted === 'en_proceso') {
-      // Obtener ambos usuarios
-      const user1 = await User.findByPk(chatRoom.user1Id);
-      const user2 = await User.findByPk(chatRoom.user2Id);
-      
-      // Incrementar contador de intercambios completados
-      user1.completedTrades += 1;
-      user2.completedTrades += 1;
-      
-      // RECOMPENSAS POR INTERCAMBIOS
-      
-      // Primer intercambio → +500 swappcoins
-      if (user1.completedTrades === 1) {
-        user1.swappcoins += 500;
-      }
-      if (user2.completedTrades === 1) {
-        user2.swappcoins += 500;
-      }
-      
-      // Tercer intercambio → +2000 swappcoins
-      if (user1.completedTrades === 3) {
-        user1.swappcoins += 2000;
-      }
-      if (user2.completedTrades === 3) {
-        user2.swappcoins += 2000;
-      }
-      
-      // Guardar cambios en ambos usuarios
-      await user1.save();
-      await user2.save();
-    }
+    // Nota: Las recompensas por intercambio NO se otorgan aquí.
+    // Se otorgarán únicamente cuando el campo `messagesInfo` del
+    // acuerdo tenga en su última posición el texto "Intercambio exitoso".
+    // Esa lógica se implementa en `updateMessagesInfo` para evitar
+    // otorgar los Swappcoins antes de la confirmación final entre usuarios.
     
     // 6. Emitir evento Socket.IO para actualización en tiempo real
     const io = req.app.get('io');
@@ -312,7 +285,52 @@ const updateMessagesInfo = async (req, res) => {
     const prevMessages = Array.isArray(tradeAgreement.messagesInfo) ? tradeAgreement.messagesInfo : [];
     const newMessages = messagesInfo.filter(msg => !prevMessages.includes(msg));
     tradeAgreement.messagesInfo = [...prevMessages, ...newMessages];
+    // Guardar primero el array de mensajes
     await tradeAgreement.save();
+
+    // Verificar si la última entrada indica intercambio exitoso
+    const msgs = Array.isArray(tradeAgreement.messagesInfo) ? tradeAgreement.messagesInfo : [];
+    const lastMsg = msgs.length ? msgs[msgs.length - 1] : null;
+
+    // Si el último mensaje es 'Intercambio exitoso' y el acuerdo está en 'en_proceso',
+    // marcar como completado y otorgar recompensas una sola vez.
+    if (lastMsg === 'Intercambio exitoso' && tradeAgreement.tradeCompleted === 'en_proceso') {
+      console.log('Intercambio exitoso detectado para chatRoomId:', chatRoomId);
+      // Marcar acuerdo como completado
+      tradeAgreement.tradeCompleted = 'completado';
+      tradeAgreement.completedAt = new Date();
+      await tradeAgreement.save();
+
+      // Obtener sala para identificar usuarios
+      const chatRoom = await ChatRoom.findByPk(chatRoomId);
+      if (chatRoom) {
+        const user1 = await User.findByPk(chatRoom.user1Id);
+        const user2 = await User.findByPk(chatRoom.user2Id);
+
+        if (user1 && user2) {
+          console.log('Otorgando recompensas por intercambio a usuarios', user1.id, user2.id);
+          // Incrementar contador de intercambios completados
+          user1.completedTrades += 1;
+          user2.completedTrades += 1;
+
+          // Primer intercambio → +500 swappcoins
+          if (user1.completedTrades === 1) user1.swappcoins += 500;
+          if (user2.completedTrades === 1) user2.swappcoins += 500;
+
+          // Tercer intercambio → +2000 swappcoins
+          if (user1.completedTrades === 3) user1.swappcoins += 2000;
+          if (user2.completedTrades === 3) user2.swappcoins += 2000;
+
+          await user1.save();
+          await user2.save();
+        } else {
+          console.warn('Usuarios no encontrados para otorgar recompensas en chatRoomId:', chatRoomId);
+        }
+      } else {
+        console.warn('ChatRoom no encontrado al intentar otorgar recompensas:', chatRoomId);
+      }
+    }
+
     return res.status(200).json({
       message: 'Mensajes actualizados correctamente.',
       messagesInfo: tradeAgreement.messagesInfo
