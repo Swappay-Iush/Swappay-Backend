@@ -41,9 +41,15 @@ const checkAndMarkAsComplete = async (tradeAgreement, chatRoomId, req) => {
   if (lastMsgNormalized === 'intercambio exitoso' && tradeAgreement.tradeCompleted === 'en_proceso') {
     console.log('[checkAndMarkAsComplete] ✅✅✅ CONDICIONES CUMPLIDAS - Marcando como completado...');
 
+    // Log del valor exacto que vamos a guardar
+    const valueToSave = 'completado';
+    console.log('[checkAndMarkAsComplete] Valor exacto a guardar:', JSON.stringify(valueToSave));
+    console.log('[checkAndMarkAsComplete] Longitud:', valueToSave.length);
+    console.log('[checkAndMarkAsComplete] Bytes:', Buffer.byteLength(valueToSave, 'utf8'));
+
     // Marcar acuerdo como completado - usar save() sin los hooks
-    console.log('[checkAndMarkAsComplete] Actualizando tradeCompleted con save(silently: [["beforeSave"]])...');
-    tradeAgreement.tradeCompleted = 'completado';
+    console.log('[checkAndMarkAsComplete] Actualizando tradeCompleted con save({ hooks: false })...');
+    tradeAgreement.tradeCompleted = valueToSave;
     tradeAgreement.completedAt = new Date();
     await tradeAgreement.save({ hooks: false });
 
