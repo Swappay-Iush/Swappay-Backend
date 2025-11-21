@@ -9,6 +9,82 @@ const TradeAgreement = require('../models/TradeAgreement');
 const ChatRoom = require('../models/ChatRoom');
 const User = require('../models/User');
 
+// ======================= FUNCIÓN HELPER: Verificar y marcar como completado =======================
+/**
+ * Verifica si la última entrada de messagesInfo es "Intercambio exitoso"
+ * Si es así y el acuerdo está en 'en_proceso', lo marca como 'completado'
+ * y otorga recompensas a ambos usuarios (una sola vez).
+ */
+const checkAndMarkAsComplete = async (tradeAgreement, chatRoomId, req) => {
+  if (!tradeAgreement) return;
+
+  const msgs = Array.isArray(tradeAgreement.messagesInfo) ? tradeAgreement.messagesInfo : [];
+  const lastMsg = msgs.length ? msgs[msgs.length - 1] : null;
+  const lastMsgNormalized = typeof lastMsg === 'string' ? lastMsg.trim().toLowerCase() : null;
+
+  console.log('[checkAndMarkAsComplete] chatRoomId:', chatRoomId);
+  console.log('[checkAndMarkAsComplete] lastMsg:', lastMsg, '| normalized:', lastMsgNormalized);
+  console.log('[checkAndMarkAsComplete] tradeCompleted estado actual:', tradeAgreement.tradeCompleted);
+
+  // Si el último mensaje es 'intercambio exitoso' y el acuerdo está en 'en_proceso',
+  // marcar como completado y otorgar recompensas una sola vez.
+  if (lastMsgNormalized === 'intercambio exitoso' && tradeAgreement.tradeCompleted === 'en_proceso') {
+    console.log('[checkAndMarkAsComplete] ✅ Intercambio exitoso detectado, marcando como completado...');
+
+    // Marcar acuerdo como completado
+    tradeAgreement.tradeCompleted = 'completado';
+    tradeAgreement.completedAt = new Date();
+    await tradeAgreement.save();
+    console.log('[checkAndMarkAsComplete] Acuerdo marcado como completado');
+
+    // Obtener sala para identificar usuarios
+    const chatRoom = await ChatRoom.findByPk(chatRoomId);
+    if (chatRoom) {
+      const user1 = await User.findByPk(chatRoom.user1Id);
+      const user2 = await User.findByPk(chatRoom.user2Id);
+
+      if (user1 && user2) {
+        console.log('[checkAndMarkAsComplete] Otorgando recompensas a usuarios:', user1.id, user2.id);
+        // Incrementar contador de intercambios completados
+        user1.completedTrades += 1;
+        user2.completedTrades += 1;
+
+        // Primer intercambio → +500 swappcoins
+        if (user1.completedTrades === 1) user1.swappcoins += 500;
+        if (user2.completedTrades === 1) user2.swappcoins += 500;
+
+        // Tercer intercambio → +2000 swappcoins
+        if (user1.completedTrades === 3) user1.swappcoins += 2000;
+        if (user2.completedTrades === 3) user2.swappcoins += 2000;
+
+        await user1.save();
+        await user2.save();
+        console.log('[checkAndMarkAsComplete] Recompensas otorgadas: user1.swappcoins=', user1.swappcoins, 'user2.swappcoins=', user2.swappcoins);
+      }
+    }
+
+    // Emitir evento para notificar a ambos clientes que el intercambio pasó a completado
+    try {
+      const io = req?.app?.get('io');
+      if (io) {
+        const chatRoom = await ChatRoom.findByPk(chatRoomId);
+        io.to(`chat_${chatRoomId}`).emit('tradeStatusUpdated', {
+          chatRoomId: tradeAgreement.chatRoomId,
+          user1Accepted: tradeAgreement.user1Accepted,
+          user2Accepted: tradeAgreement.user2Accepted,
+          tradeCompleted: tradeAgreement.tradeCompleted,
+          completedAt: tradeAgreement.completedAt,
+          user1Id: chatRoom ? chatRoom.user1Id : null,
+          user2Id: chatRoom ? chatRoom.user2Id : null
+        });
+        console.log('[checkAndMarkAsComplete] Evento tradeStatusUpdated emitido');
+      }
+    } catch (emitErr) {
+      console.error('[checkAndMarkAsComplete] Error al emitir evento:', emitErr);
+    }
+  }
+};
+
 // ======================= FUNCIÓN: ACEPTAR/RECHAZAR INTERCAMBIO =======================
 /**
  * Endpoint: POST /chat/trade/accept
@@ -163,22 +239,31 @@ const getTradeStatus = async (req, res) => {
       });
     }
 
+    // Verificar si debe marcar como completado (si últimas messagesInfo = "Intercambio exitoso")
+    console.log('[getTradeStatus] Verificando si debe marcar como completado...');
+    await checkAndMarkAsComplete(tradeAgreement, chatRoomId, req);
+
+    // Recargar el acuerdo para obtener el estado actualizado
+    const updatedTrade = await TradeAgreement.findOne({
+      where: { chatRoomId }
+    });
+
     // Obtener información de la sala para incluir user1Id/user2Id
     const chatRoom = await ChatRoom.findByPk(chatRoomId);
 
-    // Si existe, devolver el estado actual incluyendo ids de participantes
+    // Devolver el estado actual incluyendo ids de participantes
     return res.status(200).json({
       exists: true,
-      chatRoomId: tradeAgreement.chatRoomId,
-      user1Accepted: tradeAgreement.user1Accepted,
-      user2Accepted: tradeAgreement.user2Accepted,
-      tradeCompleted: tradeAgreement.tradeCompleted,
-      completedAt: tradeAgreement.completedAt,
-      messagesInfo: tradeAgreement.messagesInfo,
+      chatRoomId: updatedTrade.chatRoomId,
+      user1Accepted: updatedTrade.user1Accepted,
+      user2Accepted: updatedTrade.user2Accepted,
+      tradeCompleted: updatedTrade.tradeCompleted,
+      completedAt: updatedTrade.completedAt,
+      messagesInfo: updatedTrade.messagesInfo,
       user1Id: chatRoom ? chatRoom.user1Id : null,
       user2Id: chatRoom ? chatRoom.user2Id : null,
-      createdAt: tradeAgreement.createdAt,
-      updatedAt: tradeAgreement.updatedAt
+      createdAt: updatedTrade.createdAt,
+      updatedAt: updatedTrade.updatedAt
     });
     
   } catch (error) {
@@ -283,96 +368,39 @@ const updateMessagesInfo = async (req, res) => {
     return res.status(400).json({ message: 'Se requiere chatRoomId y un array de messagesInfo.' });
   }
   try {
+    console.log('[updateMessagesInfo] chatRoomId:', chatRoomId, '| incoming:', messagesInfo);
+    
     const tradeAgreement = await TradeAgreement.findOne({ where: { chatRoomId } });
     if (!tradeAgreement) {
       return res.status(404).json({ message: 'No existe acuerdo de intercambio para esta sala.' });
     }
+
     // Acumular mensajes sin duplicados
     const prevMessages = Array.isArray(tradeAgreement.messagesInfo) ? tradeAgreement.messagesInfo : [];
     const newMessages = messagesInfo.filter(msg => !prevMessages.includes(msg));
     tradeAgreement.messagesInfo = [...prevMessages, ...newMessages];
-    // Guardar primero el array de mensajes
+    
+    console.log('[updateMessagesInfo] prevMessages:', prevMessages, '| newMessages:', newMessages, '| stored:', tradeAgreement.messagesInfo);
+    
+    // Guardar el array de mensajes
     await tradeAgreement.save();
 
-    // Logs para depuración
-    console.log('updateMessagesInfo - chatRoomId:', chatRoomId);
-    console.log('updateMessagesInfo - prevMessages:', prevMessages);
-    console.log('updateMessagesInfo - incoming messagesInfo:', messagesInfo);
-    console.log('updateMessagesInfo - newMessages filtered:', newMessages);
-    console.log('updateMessagesInfo - stored messagesInfo:', tradeAgreement.messagesInfo);
+    // Verificar y marcar como completado si aplica
+    await checkAndMarkAsComplete(tradeAgreement, chatRoomId, req);
 
-    // Verificar si la última entrada indica intercambio exitoso
-    const msgs = Array.isArray(tradeAgreement.messagesInfo) ? tradeAgreement.messagesInfo : [];
-    const lastMsg = msgs.length ? msgs[msgs.length - 1] : null;
-
-    // Normalizar y comparar de forma robusta
-    const lastMsgNormalized = typeof lastMsg === 'string' ? lastMsg.trim().toLowerCase() : null;
-    console.log('updateMessagesInfo - lastMsg:', lastMsg, 'normalized:', lastMsgNormalized);
-
-    // Si el último mensaje es 'intercambio exitoso' y el acuerdo está en 'en_proceso',
-    // marcar como completado y otorgar recompensas una sola vez.
-    if (lastMsgNormalized === 'intercambio exitoso' && tradeAgreement.tradeCompleted === 'en_proceso') {
-      console.log('Intercambio exitoso detectado para chatRoomId:', chatRoomId);
-      // Marcar acuerdo como completado
-      tradeAgreement.tradeCompleted = 'completado';
-      tradeAgreement.completedAt = new Date();
-      await tradeAgreement.save();
-
-      // Emitir evento para notificar a ambos clientes que el intercambio pasó a completado
-      try {
-        const io = req.app.get('io');
-        if (io) {
-          // Obtener ids de participantes si están disponibles
-          const chatRoomForEmit = await ChatRoom.findByPk(chatRoomId);
-          io.to(`chat_${chatRoomId}`).emit('tradeStatusUpdated', {
-            chatRoomId: tradeAgreement.chatRoomId,
-            user1Accepted: tradeAgreement.user1Accepted,
-            user2Accepted: tradeAgreement.user2Accepted,
-            tradeCompleted: tradeAgreement.tradeCompleted,
-            completedAt: tradeAgreement.completedAt,
-            user1Id: chatRoomForEmit ? chatRoomForEmit.user1Id : null,
-            user2Id: chatRoomForEmit ? chatRoomForEmit.user2Id : null
-          });
-          console.log('Evento tradeStatusUpdated emitido por updateMessagesInfo para completado');
-        }
-      } catch (emitErr) {
-        console.error('Error al emitir evento tradeStatusUpdated desde updateMessagesInfo:', emitErr);
-      }
-
-      // Obtener sala para identificar usuarios
-      const chatRoom = await ChatRoom.findByPk(chatRoomId);
-      if (chatRoom) {
-        const user1 = await User.findByPk(chatRoom.user1Id);
-        const user2 = await User.findByPk(chatRoom.user2Id);
-
-        if (user1 && user2) {
-          console.log('Otorgando recompensas por intercambio a usuarios', user1.id, user2.id);
-          // Incrementar contador de intercambios completados
-          user1.completedTrades += 1;
-          user2.completedTrades += 1;
-
-          // Primer intercambio → +500 swappcoins
-          if (user1.completedTrades === 1) user1.swappcoins += 500;
-          if (user2.completedTrades === 1) user2.swappcoins += 500;
-
-          // Tercer intercambio → +2000 swappcoins
-          if (user1.completedTrades === 3) user1.swappcoins += 2000;
-          if (user2.completedTrades === 3) user2.swappcoins += 2000;
-
-          await user1.save();
-          await user2.save();
-        } else {
-          console.warn('Usuarios no encontrados para otorgar recompensas en chatRoomId:', chatRoomId);
-        }
-      } else {
-        console.warn('ChatRoom no encontrado al intentar otorgar recompensas:', chatRoomId);
-      }
-    }
+    // Recargar para obtener el estado actualizado
+    const updatedTrade = await TradeAgreement.findOne({ where: { chatRoomId } });
 
     return res.status(200).json({
       message: 'Mensajes actualizados correctamente.',
-      messagesInfo: tradeAgreement.messagesInfo
+      messagesInfo: updatedTrade.messagesInfo,
+      tradeCompleted: updatedTrade.tradeCompleted
     });
+  } catch (error) {
+    console.error('[updateMessagesInfo] Error:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
   } catch (error) {
     console.error('Error al actualizar messagesInfo:', error);
     return res.status(500).json({ message: error.message });
