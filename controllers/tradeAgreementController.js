@@ -16,26 +16,38 @@ const User = require('../models/User');
  * y otorga recompensas a ambos usuarios (una sola vez).
  */
 const checkAndMarkAsComplete = async (tradeAgreement, chatRoomId, req) => {
-  if (!tradeAgreement) return;
+  if (!tradeAgreement) {
+    console.log('[checkAndMarkAsComplete] tradeAgreement es null/undefined, retornando.');
+    return;
+  }
 
   const msgs = Array.isArray(tradeAgreement.messagesInfo) ? tradeAgreement.messagesInfo : [];
   const lastMsg = msgs.length ? msgs[msgs.length - 1] : null;
   const lastMsgNormalized = typeof lastMsg === 'string' ? lastMsg.trim().toLowerCase() : null;
 
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('[checkAndMarkAsComplete] INICIANDO VERIFICACIÓN');
   console.log('[checkAndMarkAsComplete] chatRoomId:', chatRoomId);
-  console.log('[checkAndMarkAsComplete] lastMsg:', lastMsg, '| normalized:', lastMsgNormalized);
-  console.log('[checkAndMarkAsComplete] tradeCompleted estado actual:', tradeAgreement.tradeCompleted);
+  console.log('[checkAndMarkAsComplete] messagesInfo completo:', JSON.stringify(msgs));
+  console.log('[checkAndMarkAsComplete] lastMsg (original):', lastMsg);
+  console.log('[checkAndMarkAsComplete] lastMsg (normalizado):', lastMsgNormalized);
+  console.log('[checkAndMarkAsComplete] tradeCompleted actual:', tradeAgreement.tradeCompleted);
+  console.log('[checkAndMarkAsComplete] Condición 1 - lastMsgNormalized === "intercambio exitoso":', lastMsgNormalized === 'intercambio exitoso');
+  console.log('[checkAndMarkAsComplete] Condición 2 - tradeCompleted === "en_proceso":', tradeAgreement.tradeCompleted === 'en_proceso');
+  console.log('═══════════════════════════════════════════════════════════');
 
   // Si el último mensaje es 'intercambio exitoso' y el acuerdo está en 'en_proceso',
   // marcar como completado y otorgar recompensas una sola vez.
   if (lastMsgNormalized === 'intercambio exitoso' && tradeAgreement.tradeCompleted === 'en_proceso') {
-    console.log('[checkAndMarkAsComplete] ✅ Intercambio exitoso detectado, marcando como completado...');
+    console.log('[checkAndMarkAsComplete] ✅✅✅ CONDICIONES CUMPLIDAS - Marcando como completado...');
 
     // Marcar acuerdo como completado
     tradeAgreement.tradeCompleted = 'completado';
     tradeAgreement.completedAt = new Date();
-    await tradeAgreement.save();
-    console.log('[checkAndMarkAsComplete] Acuerdo marcado como completado');
+    
+    console.log('[checkAndMarkAsComplete] Guardando cambios en BD...');
+    const savedTrade = await tradeAgreement.save();
+    console.log('[checkAndMarkAsComplete] Datos guardados. tradeCompleted en BD:', savedTrade.tradeCompleted);
 
     // Obtener sala para identificar usuarios
     const chatRoom = await ChatRoom.findByPk(chatRoomId);
@@ -60,7 +72,11 @@ const checkAndMarkAsComplete = async (tradeAgreement, chatRoomId, req) => {
         await user1.save();
         await user2.save();
         console.log('[checkAndMarkAsComplete] Recompensas otorgadas: user1.swappcoins=', user1.swappcoins, 'user2.swappcoins=', user2.swappcoins);
+      } else {
+        console.warn('[checkAndMarkAsComplete] ⚠️ Usuarios no encontrados');
       }
+    } else {
+      console.warn('[checkAndMarkAsComplete] ⚠️ ChatRoom no encontrado');
     }
 
     // Emitir evento para notificar a ambos clientes que el intercambio pasó a completado
@@ -69,19 +85,23 @@ const checkAndMarkAsComplete = async (tradeAgreement, chatRoomId, req) => {
       if (io) {
         const chatRoom = await ChatRoom.findByPk(chatRoomId);
         io.to(`chat_${chatRoomId}`).emit('tradeStatusUpdated', {
-          chatRoomId: tradeAgreement.chatRoomId,
-          user1Accepted: tradeAgreement.user1Accepted,
-          user2Accepted: tradeAgreement.user2Accepted,
-          tradeCompleted: tradeAgreement.tradeCompleted,
-          completedAt: tradeAgreement.completedAt,
+          chatRoomId: savedTrade.chatRoomId,
+          user1Accepted: savedTrade.user1Accepted,
+          user2Accepted: savedTrade.user2Accepted,
+          tradeCompleted: savedTrade.tradeCompleted,
+          completedAt: savedTrade.completedAt,
           user1Id: chatRoom ? chatRoom.user1Id : null,
           user2Id: chatRoom ? chatRoom.user2Id : null
         });
-        console.log('[checkAndMarkAsComplete] Evento tradeStatusUpdated emitido');
+        console.log('[checkAndMarkAsComplete] ✅ Evento tradeStatusUpdated emitido con tradeCompleted=completado');
+      } else {
+        console.warn('[checkAndMarkAsComplete] ⚠️ Socket.IO no disponible');
       }
     } catch (emitErr) {
-      console.error('[checkAndMarkAsComplete] Error al emitir evento:', emitErr);
+      console.error('[checkAndMarkAsComplete] ❌ Error al emitir evento:', emitErr.message);
     }
+  } else {
+    console.log('[checkAndMarkAsComplete] ℹ️ Condiciones NO cumplidas, no se marca como completado');
   }
 };
 
@@ -364,13 +384,18 @@ const getAllTrades = async (req, res) => {
 const updateMessagesInfo = async (req, res) => {
   const { id: chatRoomId } = req.params;
   const { messagesInfo } = req.body;
+  
+  console.log('\n╔════════════════════════════════════════════╗');
+  console.log('║ updateMessagesInfo INICIADO');
+  console.log('║ chatRoomId:', chatRoomId);
+  console.log('║ incoming messagesInfo:', JSON.stringify(messagesInfo));
+  console.log('╚════════════════════════════════════════════╝\n');
+
   if (!chatRoomId || !Array.isArray(messagesInfo)) {
     return res.status(400).json({ message: 'Se requiere chatRoomId y un array de messagesInfo.' });
   }
   try {
-    console.log('[updateMessagesInfo] chatRoomId:', chatRoomId, '| incoming:', messagesInfo);
-    
-    const tradeAgreement = await TradeAgreement.findOne({ where: { chatRoomId } });
+    let tradeAgreement = await TradeAgreement.findOne({ where: { chatRoomId } });
     if (!tradeAgreement) {
       return res.status(404).json({ message: 'No existe acuerdo de intercambio para esta sala.' });
     }
@@ -380,24 +405,36 @@ const updateMessagesInfo = async (req, res) => {
     const newMessages = messagesInfo.filter(msg => !prevMessages.includes(msg));
     tradeAgreement.messagesInfo = [...prevMessages, ...newMessages];
     
-    console.log('[updateMessagesInfo] prevMessages:', prevMessages, '| newMessages:', newMessages, '| stored:', tradeAgreement.messagesInfo);
+    console.log('[updateMessagesInfo] prevMessages:', JSON.stringify(prevMessages));
+    console.log('[updateMessagesInfo] newMessages:', JSON.stringify(newMessages));
+    console.log('[updateMessagesInfo] stored messagesInfo:', JSON.stringify(tradeAgreement.messagesInfo));
     
     // Guardar el array de mensajes
     await tradeAgreement.save();
+    console.log('[updateMessagesInfo] Mensajes guardados en BD');
 
     // Verificar y marcar como completado si aplica
+    console.log('[updateMessagesInfo] Llamando checkAndMarkAsComplete...');
     await checkAndMarkAsComplete(tradeAgreement, chatRoomId, req);
 
-    // Recargar para obtener el estado actualizado
-    const updatedTrade = await TradeAgreement.findOne({ where: { chatRoomId } });
+    // Recargar para obtener el estado actualizado desde la BD
+    console.log('[updateMessagesInfo] Recargando tradeAgreement de la BD...');
+    tradeAgreement = await TradeAgreement.findOne({ where: { chatRoomId } });
+    console.log('[updateMessagesInfo] tradeCompleted reloaded:', tradeAgreement.tradeCompleted);
+
+    console.log('\n╔════════════════════════════════════════════╗');
+    console.log('║ updateMessagesInfo FINALIZADO');
+    console.log('║ tradeCompleted FINAL:', tradeAgreement.tradeCompleted);
+    console.log('║ messagesInfo FINAL:', JSON.stringify(tradeAgreement.messagesInfo));
+    console.log('╚════════════════════════════════════════════╝\n');
 
     return res.status(200).json({
       message: 'Mensajes actualizados correctamente.',
-      messagesInfo: updatedTrade.messagesInfo,
-      tradeCompleted: updatedTrade.tradeCompleted
+      messagesInfo: tradeAgreement.messagesInfo,
+      tradeCompleted: tradeAgreement.tradeCompleted
     });
   } catch (error) {
-    console.error('[updateMessagesInfo] Error:', error);
+    console.error('[updateMessagesInfo] ❌ Error:', error);
     return res.status(500).json({ message: error.message });
   }
 };
