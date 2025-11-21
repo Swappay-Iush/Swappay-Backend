@@ -36,24 +36,6 @@ const CartItem = sequelize.define('CartItem', {
     allowNull: false,
     defaultValue: 1
   },
-  
-  // NUEVO: Guardar precios al momento de agregar (por si cambian después)
-  priceSnapshot: {
-    type: DataTypes.FLOAT,
-    allowNull: true,
-  },
-  
-  swapcoinsSnapshot: {
-    type: DataTypes.FLOAT,
-    allowNull: true,
-  },
-
-  offeredProductId: {
-    type: DataTypes.INTEGER,
-    allowNull: true,
-    references: { model: 'Products', key: 'id' },
-  }
-  
 }, {
   tableName: 'cart_items',
   timestamps: true // Cambia a true para tener createdAt
