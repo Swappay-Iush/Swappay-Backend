@@ -30,4 +30,7 @@ router.put('/:id/profile-image', uploadProfile.single('profileImage'), userContr
 // Eliminar imagen de perfil
 router.delete('/:id/profile-image', userController.deleteProfileImage);
 
+// Obtener balance de Swappcoins
+router.get('/:id/swappcoins', userController.getSwappcoinsBalance);
+
 module.exports = router; //Exportamos el router para usarlo en otros archivos, como en index.js.

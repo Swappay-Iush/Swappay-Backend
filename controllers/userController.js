@@ -31,7 +31,8 @@ const createUser = async(req, res) => { //Crear un nuevo usuario.
             country,
             email,
             password: hashedPassword, //Guardamos la contraseña encriptada
-            rol
+            rol,
+            swappcoins: 100 //Bono de bienvenida por registrarse (+100 swappcoins)
         });
 
         res.status(201).json({ //Enviamos una respuesta de éxito con los datos del nuevo usuario (sin la contraseña).
@@ -88,6 +89,17 @@ const updateUser = async (req, res) => { //Actualizar la información del usuari
 
     // Guardar los cambios
     await user.update(updatedData); //Actualizamos el usuario con los datos proporcionados
+
+    // Verificar si el perfil está completo y dar recompensa si es la primera vez
+    const isProfileComplete = user.city && user.phone && user.address && 
+                              user.gender && user.dateBirth;
+    
+    // Si el perfil está completo y no ha recibido el bono antes
+    if (isProfileComplete && !user.profileCompletedReward) {
+      user.swappcoins += 200; //Bono por completar perfil (+200 swappcoins)
+      user.profileCompletedReward = true; //Marcar que ya recibió el bono
+      await user.save(); //Guardar los cambios
+    }
 
     res.status(200).json({ message: 'Información Actualizada.', user });
 
@@ -210,6 +222,31 @@ const uploadProfileImage = async (req, res) => { //Actualizar la imagen de perfi
   } catch (error) {
     console.error('Error al subir imagen:', error);
     res.status(500).json({ error: 'Error interno al subir imagen' });
+  }
+};
+
+// Obtener balance de Swappcoins
+const getSwappcoinsBalance = async (req, res) => { //Consultar el balance de Swappcoins de un usuario.
+  const { id } = req.params; //Obtenemos el ID del usuario desde los parámetros de la ruta.
+  
+  try {
+    const user = await User.findByPk(id, { //Buscamos el usuario por su ID.
+      attributes: ['id', 'username', 'swappcoins', 'completedTrades', 'profileCompletedReward'] //Seleccionamos solo los campos necesarios
+    });
+    
+    if (!user) { //Si no encontramos el usuario, enviamos un error 404 (no encontrado).
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    
+    res.status(200).json({ //Enviamos el balance de Swappcoins en la respuesta.
+      userId: user.id,
+      username: user.username,
+      swappcoins: user.swappcoins,
+      completedTrades: user.completedTrades,
+      profileCompletedReward: user.profileCompletedReward
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -349,5 +386,6 @@ module.exports = { //Exportamos las funciones para usarlas en las rutas
   deleteProfileImage,
   getAllUsers,
   resetPassword,
-  deleteUserByAdmin
+  deleteUserByAdmin,
+  getSwappcoinsBalance
 }
