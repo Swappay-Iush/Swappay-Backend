@@ -41,13 +41,16 @@ const checkAndMarkAsComplete = async (tradeAgreement, chatRoomId, req) => {
   if (lastMsgNormalized === 'intercambio exitoso' && tradeAgreement.tradeCompleted === 'en_proceso') {
     console.log('[checkAndMarkAsComplete] ✅✅✅ CONDICIONES CUMPLIDAS - Marcando como completado...');
 
-    // Marcar acuerdo como completado
-    tradeAgreement.tradeCompleted = 'completado';
-    tradeAgreement.completedAt = new Date();
-    
-    console.log('[checkAndMarkAsComplete] Guardando cambios en BD...');
-    const savedTrade = await tradeAgreement.save();
-    console.log('[checkAndMarkAsComplete] Datos guardados. tradeCompleted en BD:', savedTrade.tradeCompleted);
+    // Marcar acuerdo como completado - usar update() en lugar de save()
+    console.log('[checkAndMarkAsComplete] Actualizando tradeCompleted en BD con método update()...');
+    await TradeAgreement.update(
+      { tradeCompleted: 'completado', completedAt: new Date() },
+      { where: { chatRoomId } }
+    );
+
+    // Recargar el objeto para obtener los datos actualizados
+    const reloadedTrade = await TradeAgreement.findOne({ where: { chatRoomId } });
+    console.log('[checkAndMarkAsComplete] Después de update(), tradeCompleted en BD:', reloadedTrade.tradeCompleted);
 
     // Obtener sala para identificar usuarios
     const chatRoom = await ChatRoom.findByPk(chatRoomId);
@@ -85,15 +88,15 @@ const checkAndMarkAsComplete = async (tradeAgreement, chatRoomId, req) => {
       if (io) {
         const chatRoom = await ChatRoom.findByPk(chatRoomId);
         io.to(`chat_${chatRoomId}`).emit('tradeStatusUpdated', {
-          chatRoomId: savedTrade.chatRoomId,
-          user1Accepted: savedTrade.user1Accepted,
-          user2Accepted: savedTrade.user2Accepted,
-          tradeCompleted: savedTrade.tradeCompleted,
-          completedAt: savedTrade.completedAt,
+          chatRoomId: reloadedTrade.chatRoomId,
+          user1Accepted: reloadedTrade.user1Accepted,
+          user2Accepted: reloadedTrade.user2Accepted,
+          tradeCompleted: reloadedTrade.tradeCompleted,
+          completedAt: reloadedTrade.completedAt,
           user1Id: chatRoom ? chatRoom.user1Id : null,
           user2Id: chatRoom ? chatRoom.user2Id : null
         });
-        console.log('[checkAndMarkAsComplete] ✅ Evento tradeStatusUpdated emitido con tradeCompleted=completado');
+        console.log('[checkAndMarkAsComplete] ✅ Evento tradeStatusUpdated emitido con tradeCompleted=' + reloadedTrade.tradeCompleted);
       } else {
         console.warn('[checkAndMarkAsComplete] ⚠️ Socket.IO no disponible');
       }
