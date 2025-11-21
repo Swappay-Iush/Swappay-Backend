@@ -401,11 +401,6 @@ const updateMessagesInfo = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-  } catch (error) {
-    console.error('Error al actualizar messagesInfo:', error);
-    return res.status(500).json({ message: error.message });
-  }
-};
 
 // ======================= FUNCIÓN: ELIMINAR ACUERDO DE INTERCAMBIO =======================
 /**
