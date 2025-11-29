@@ -1,6 +1,7 @@
 const ProductOffer = require("../models/ProductOffer");
 const fs = require('fs');
 const path = require('path');
+const User = require('../models/User');
 
 const createProductOffer = async (req, res) => {
   const {
@@ -52,7 +53,15 @@ const createProductOffer = async (req, res) => {
 
 const getAllProductOffers = async (req, res) => {
   try {
-    const offers = await ProductOffer.findAll();
+    // Buscar todas las ofertas incluyendo el usuario con el alias correcto
+    const offers = await ProductOffer.findAll({
+      include: [{
+        model: User,
+        attributes: ['id', 'username'],
+        as: 'offerOwner', 
+        required: false
+      }]
+    });
     // Solo mostrar los campos seleccionados
     const result = offers.map(offer => ({
       id: offer.id,
@@ -68,7 +77,8 @@ const getAllProductOffers = async (req, res) => {
       availability: offer.availability,
       img1: offer.img1,
       img2: offer.img2,
-      img3: offer.img3
+      img3: offer.img3,
+      user: offer.offerOwner ? { id: offer.offerOwner.id, name: offer.offerOwner.username } : null
     }));
     res.status(200).json(result);
   } catch (error) {

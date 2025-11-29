@@ -50,7 +50,7 @@ const productOfferRoutes = require('./routes/productOfferRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const tradeAgreementRoutes = require('./routes/tradeAgreementRoutes');
 
-
+const ProductsPurchasedRoutes = require("./routes/ProductsPurchasedRoutes");
 
 app.use('/users', userRoutes);
 app.use('/auth', authRoutes);
@@ -62,6 +62,8 @@ app.use('/product-offer', productOfferRoutes);
 
 app.use('/chat', chatRoutes);
 app.use('/chat/trade', tradeAgreementRoutes);
+
+app.use('/products-purchased', ProductsPurchasedRoutes);
 
 app.get('/', (req, res) => {
     res.send("Hola desde la API de Swappay.");
