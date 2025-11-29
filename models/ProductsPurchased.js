@@ -8,12 +8,12 @@ const ProductsPurchased = sequelize.define('ProductsPurchased', {
     },
     idsProducts: { //Arreglo que almacena los id de cada producto de oferta comprado.
         type: DataTypes.JSON, 
-        allowNull: false,
+        allowNull: true,
         defaultValue: []
     },
     idsProductsChange: {//Arreglo que almacena los id de cada intercambio comprado.
         type: DataTypes.JSON, 
-        allowNull: false,
+        allowNull: true,
         defaultValue: []
     },
     totalProducts: { //Total de productos comprados
