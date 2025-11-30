@@ -87,7 +87,7 @@ const getAllPurchases = async (req, res) => {
 const deletePurchase = async (req, res) => {
 	try {
 		const { id } = req.params;
-		const deleted = await ProductsPurchased.destroy({ where: { id: id } });
+		const deleted = await ProductsPurchased.destroy({ where: { idBuys: id } });
 		if (deleted) {
 			return res.status(200).json({ message: 'Compra eliminada correctamente.' });
 		} else {
