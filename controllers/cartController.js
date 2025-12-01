@@ -1,21 +1,45 @@
 const CartItem = require('../models/CartItem');
 const Products = require('../models/Products');
+const ProductOffer = require('../models/ProductOffer');
 
 const addItem = async (req, res) => {
   try {
-    const { idUser, idProduct, quantity = 1 } = req.body;
-    if (!idUser || !idProduct) return res.status(400).json({ error: 'Faltan campos.' });
+    const { idUser, itemType, idProductOffer, idProduct, quantity = 1 } = req.body;
 
-    const product = await Products.findByPk(idProduct);
-    if (!product) return res.status(404).json({ error: 'Producto no encontrado.' });
+    // Validaciones básicas
+    if (!idUser || !itemType || (itemType === 'offer' && !idProductOffer) || (itemType === 'exchange' && !idProduct)) {
+      return res.status(400).json({ error: 'Faltan campos requeridos.' });
+    }
 
-    // Ver si el item ya existe en el carrito del usuario
-    let item = await CartItem.findOne({ where: { idUser, idProduct } });
+    // Validar existencia del producto u oferta según el tipo
+    if (itemType === 'offer') {
+      const offer = await ProductOffer.findByPk(idProductOffer);
+      if (!offer) return res.status(404).json({ error: 'Oferta no encontrada.' });
+    } else if (itemType === 'exchange') {
+      const product = await Products.findByPk(idProduct);
+      if (!product) return res.status(404).json({ error: 'Producto no encontrado.' });
+    }
+
+    // Buscar si el item ya existe en el carrito del usuario
+    let whereClause = { idUser, itemType };
+    if (itemType === 'offer') {
+      whereClause.idProductOffer = idProductOffer;
+    } else if (itemType === 'exchange') {
+      whereClause.idProduct = idProduct;
+    }
+
+    let item = await CartItem.findOne({ where: whereClause });
     if (item) {
       item.quantity += Number(quantity);
       await item.save();
     } else {
-      item = await CartItem.create({ idUser, idProduct, quantity });
+      item = await CartItem.create({
+        idUser,
+        itemType,
+        idProductOffer: itemType === 'offer' ? idProductOffer : null,
+        idProduct: itemType === 'exchange' ? idProduct : null,
+        quantity
+      });
     }
 
     res.status(201).json({ message: 'Item añadido al carrito.', item });
