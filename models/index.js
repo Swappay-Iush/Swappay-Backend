@@ -34,9 +34,6 @@ CartItem.belongsTo(ProductOffer, { foreignKey: 'idProductOffer', as: 'productOff
 // CartItem pertenece a Products (para items tipo 'exchange')
 CartItem.belongsTo(Products, { foreignKey: 'idProduct', as: 'product', onDelete: 'CASCADE' });
 
-// CartItem referencia al producto ofrecido por el usuario en intercambios
-CartItem.belongsTo(Products, { foreignKey: 'offeredProductId', as: 'offeredProduct', onDelete: 'SET NULL' });
-
 // Un usuario puede tener muchos items en su carrito
 User.hasMany(CartItem, { foreignKey: 'idUser', as: 'cartItems', onDelete: 'CASCADE' });
 
