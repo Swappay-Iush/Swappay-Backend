@@ -20,5 +20,12 @@ router.get('/user/:id', productOfferController.getProductOffersByUser);
 // Eliminar una oferta
 router.delete('/:id', productOfferController.deleteProductOffer);
 
+// Editar una oferta de producto
+router.put('/:id', uploadProductOffer.fields([
+  { name: 'img1', maxCount: 1 },
+  { name: 'img2', maxCount: 1 },
+  { name: 'img3', maxCount: 1 }
+]), productOfferController.editProductOffer);
+
 
 module.exports = router;

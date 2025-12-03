@@ -130,9 +130,94 @@ const deleteProductOffer = async (req, res) => {
   }
 };
 
+// Editar oferta de producto
+async function editProductOffer(req, res) {
+  const { id } = req.params;
+  const {
+    title, description, specs, category, amount,
+    priceOriginal, discount, availability
+  } = req.body;
+
+  try {
+    const offer = await ProductOffer.findByPk(id);
+    if (!offer) return res.status(404).json({ error: "Oferta no encontrada." });
+
+    // Imágenes
+    let img1 = offer.img1;
+    let img2 = offer.img2;
+    let img3 = offer.img3;
+
+    // Si se envían nuevas imágenes, eliminar las viejas y actualizar
+    if (req.files?.img1) {
+      if (img1) {
+        const fileName = path.basename(img1);
+        const imgPath = path.join(__dirname, '..', 'uploads', 'productOffer', fileName);
+        if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+      }
+      img1 = `/uploads/productOffer/${req.files.img1[0].filename}`;
+    }
+    if (req.files?.img2) {
+      if (img2) {
+        const fileName = path.basename(img2);
+        const imgPath = path.join(__dirname, '..', 'uploads', 'productOffer', fileName);
+        if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+      }
+      img2 = `/uploads/productOffer/${req.files.img2[0].filename}`;
+    }
+    if (req.files?.img3) {
+      if (img3) {
+        const fileName = path.basename(img3);
+        const imgPath = path.join(__dirname, '..', 'uploads', 'productOffer', fileName);
+        if (fs.existsSync(imgPath)) fs.unlinkSync(imgPath);
+      }
+      img3 = `/uploads/productOffer/${req.files.img3[0].filename}`;
+    }
+
+    // Calcular el precio con descuento
+    const priceDiscount = priceOriginal - (priceOriginal * (discount / 100));
+    // Calcular priceSwapcoins según priceOriginal
+    let priceSwapcoins = 0;
+    if (priceDiscount > 5000) {
+      priceSwapcoins = 800;
+    } else if (priceDiscount > 1000) {
+      priceSwapcoins = 1200;
+    } else if (priceDiscount > 500 && priceDiscount < 1000) {
+      priceSwapcoins = 900;
+    } else if (priceDiscount > 300 && priceDiscount < 500) {
+      priceSwapcoins = 600;
+    } else if (priceDiscount > 0 && priceDiscount < 300) {
+      priceSwapcoins = 300;
+    }
+
+    const availabilityBool = Number(amount) > 0;
+
+    await offer.update({
+      title: title ?? offer.title,
+      description: description ?? offer.description,
+      specs: specs ?? offer.specs,
+      category: category ?? offer.category,
+      amount: amount !== undefined ? Number(amount) : offer.amount,
+      priceOriginal: priceOriginal ?? offer.priceOriginal,
+      discount: discount ?? offer.discount,
+      priceDiscount,
+      priceSwapcoins,
+      availability: availabilityBool,
+      img1,
+      img2,
+      img3
+    });
+
+    res.status(200).json({ message: "Oferta editada exitosamente.", offer });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
 module.exports = {
   createProductOffer,
   getAllProductOffers,
   getProductOffersByUser,
-  deleteProductOffer
+  deleteProductOffer,
+  editProductOffer
 };
+
