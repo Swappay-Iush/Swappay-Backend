@@ -14,7 +14,15 @@ const Message = sequelize.define('Message', {
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
   },
-  content: { type: DataTypes.TEXT, allowNull: false },
+  type: {
+    type: DataTypes.ENUM('text', 'image'),
+    allowNull: false,
+    defaultValue: 'text'
+  },
+  content: { type: DataTypes.TEXT, allowNull: true },
+  mediaUrl: { type: DataTypes.STRING, allowNull: true },
+  mediaName: { type: DataTypes.STRING, allowNull: true },
+  mediaSize: { type: DataTypes.INTEGER, allowNull: true },
   read: { type: DataTypes.BOOLEAN, defaultValue: false }
 }, { tableName: 'messages', timestamps: true });
 

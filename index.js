@@ -11,6 +11,9 @@ const cron = require('node-cron');
 const { Op } = require('sequelize');
 const sequelize = require('./database');
 
+// Inicializa asociaciones de modelos
+require('./models/index');
+
 // ======================= MODELOS =======================
 const User = require('./models/User');
 const Products = require('./models/Products');
@@ -85,19 +88,45 @@ io.on('connection', (socket) => {
 
 
     // ======================= EVENTO: sendMessage =======================
-    socket.on('sendMessage', async ({ chatRoomId, senderId, content, user1Id, user2Id }) => {
+    socket.on('sendMessage', async ({ chatRoomId, senderId, content, user1Id, user2Id, type = 'text' }) => {
         try {
+            const numericChatRoomId = Number(chatRoomId);
+            const numericSenderId = Number(senderId);
+
+            if (Number.isNaN(numericChatRoomId) || Number.isNaN(numericSenderId)) {
+                console.warn('Identificadores inválidos al enviar mensaje de chat.');
+                return;
+            }
+
             // Si la sala no existe, créala (requiere user1Id y user2Id)
-            let chatRoom = await ChatRoom.findByPk(chatRoomId);
+            let chatRoom = await ChatRoom.findByPk(numericChatRoomId);
             if (!chatRoom && user1Id && user2Id) {
-                chatRoom = await ChatRoom.create({ id: chatRoomId, user1Id, user2Id });
+                chatRoom = await ChatRoom.create({ id: numericChatRoomId, user1Id, user2Id });
             }
 
             // Guardar el mensaje en la base de datos
-            await Message.create({ chatRoomId, senderId, content });
+            const trimmedContent = typeof content === 'string' ? content.trim() : '';
+
+            if (type !== 'text') {
+                type = 'text';
+            }
+
+            if (!trimmedContent) {
+                console.warn('Mensaje de chat vacío recibido y omitido.');
+                return;
+            }
+
+            const message = await Message.create({
+                chatRoomId: numericChatRoomId,
+                senderId: numericSenderId,
+                type,
+                content: trimmedContent
+            });
+
+            const payload = message.get({ plain: true });
 
             // Emitir el mensaje a todos los sockets en la sala chat_{chatRoomId}
-            io.to(`chat_${chatRoomId}`).emit('newMessage', { chatRoomId, senderId, content });
+            io.to(`chat_${numericChatRoomId}`).emit('newMessage', payload);
         } catch (err) {
             console.error('Error en sendMessage:', err);
         }

@@ -11,8 +11,12 @@ const Message = require('../models/Message');
 // Importa el modelo Products para validar productos
 const Products = require('../models/Products');
 
+// Importa el modelo TradeAgreement para validar acuerdos de intercambio
+const TradeAgreement = require('../models/TradeAgreement');
+
 // Ahora se usa Op.or directamente (estándar de Sequelize)
 const { Op } = require('sequelize');
+const path = require('path');
 
 // ======================= FUNCIÓN: CREAR SALA DE CHAT =======================
 
@@ -89,7 +93,7 @@ const getChatRoom = async (req, res) => {
         {
           model: Products,
           as: 'Product', // Alias definido en las asociaciones (index.js)
-          attributes: ['id', 'name', 'price', 'description', 'image']
+          attributes: ['id', 'title', 'description', 'priceSwapcoins', 'image1']
         }
       ]
     });
@@ -169,11 +173,170 @@ const getMessages = async (req, res) => {
   }
 };
 
+const uploadChatImage = async (req, res) => {
+  const { chatRoomId } = req.params;
+  const requesterId = req.user?.id;
+  const caption = req.body?.content;
+
+  if (!chatRoomId) {
+    return res.status(400).json({ message: 'chatRoomId es requerido.' });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ message: 'Archivo de imagen requerido.' });
+  }
+
+  try {
+    const numericChatRoomId = Number(chatRoomId);
+    const numericRequesterId = Number(requesterId);
+
+    if (!requesterId || Number.isNaN(numericRequesterId)) {
+      return res.status(401).json({ message: 'Usuario no autenticado.' });
+    }
+
+    const chatRoom = await ChatRoom.findByPk(numericChatRoomId);
+
+    if (!chatRoom) {
+      return res.status(404).json({ message: 'Sala de chat no encontrada.' });
+    }
+
+    const participants = [chatRoom.user1Id, chatRoom.user2Id]
+      .map((participantId) => (participantId !== null && participantId !== undefined ? String(participantId) : null))
+      .filter((participantId) => participantId !== null);
+
+    const requesterKey = String(numericRequesterId);
+
+    if (!participants.includes(requesterKey)) {
+      const updates = {};
+
+      if (chatRoom.user1Id === null || chatRoom.user1Id === undefined) {
+        updates.user1Id = numericRequesterId;
+      } else if (chatRoom.user2Id === null || chatRoom.user2Id === undefined) {
+        updates.user2Id = numericRequesterId;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await chatRoom.update(updates);
+      } else {
+        return res.status(403).json({ message: 'No tienes permisos para enviar archivos en esta sala.' });
+      }
+    }
+
+    const relativePath = path.posix.join('uploads', 'chat', req.file.filename);
+    const fileUrl = `${req.protocol}://${req.get('host')}/${relativePath}`;
+
+    const message = await Message.create({
+      chatRoomId: numericChatRoomId,
+      senderId: numericRequesterId,
+      type: 'image',
+      content: caption || null,
+      mediaUrl: fileUrl,
+      mediaName: req.file.originalname,
+      mediaSize: req.file.size
+    });
+
+    const payload = message.get({ plain: true });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`chat_${numericChatRoomId}`).emit('newMessage', payload);
+    }
+
+    return res.status(201).json(payload);
+  } catch (error) {
+    console.error('Error al subir imagen de chat:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const deleteChat = async (req, res) => {
+  const { chatRoomId } = req.params;
+  const requesterId = req.user?.id ?? req.body?.userId;
+
+  if (!chatRoomId) {
+    return res.status(400).json({ message: 'chatRoomId es requerido.' });
+  }
+
+  try {
+    const numericChatRoomId = Number(chatRoomId);
+    const chatRoom = await ChatRoom.findByPk(numericChatRoomId);
+
+    if (!chatRoom) {
+      return res.status(404).json({ message: 'Sala de chat no encontrada.' });
+    }
+
+    if (requesterId !== undefined && requesterId !== null) {
+      const numericRequesterId = Number(requesterId);
+      if (!Number.isNaN(numericRequesterId)) {
+        const participants = [chatRoom.user1Id, chatRoom.user2Id]
+          .map((participantId) => (participantId !== null && participantId !== undefined ? Number(participantId) : null))
+          .filter((participantId) => participantId !== null);
+
+        if (!participants.includes(numericRequesterId)) {
+          const requestUser = await User.findByPk(numericRequesterId);
+
+          if (requestUser?.rol === 'admin') {
+            console.warn(`Administrador ${numericRequesterId} eliminó chat ${numericChatRoomId}`);
+          } else {
+            const updates = {};
+
+            if (chatRoom.user1Id === null || chatRoom.user1Id === undefined) {
+              updates.user1Id = numericRequesterId;
+            } else if (chatRoom.user2Id === null || chatRoom.user2Id === undefined) {
+              updates.user2Id = numericRequesterId;
+            }
+
+            if (Object.keys(updates).length > 0) {
+              await chatRoom.update(updates);
+            } else {
+              return res.status(403).json({ message: 'No tienes permisos para eliminar esta sala.' });
+            }
+          }
+        }
+      }
+    }
+
+    const tradeAgreement = await TradeAgreement.findOne({ where: { chatRoomId: numericChatRoomId } });
+
+    if (!tradeAgreement) {
+      return res.status(409).json({ message: 'Aún no existe un acuerdo de intercambio para esta sala.' });
+    }
+
+    const bothAccepted = tradeAgreement.user1Accepted && tradeAgreement.user2Accepted;
+    const hasSuccessMessage = Array.isArray(tradeAgreement.messagesInfo)
+      ? tradeAgreement.messagesInfo.some((msg) => typeof msg === 'string' && msg.trim().toLowerCase() === 'intercambio exitoso')
+      : false;
+    const tradeCompleted = tradeAgreement.tradeCompleted === 'completado';
+
+    if (!(bothAccepted || hasSuccessMessage || tradeCompleted)) {
+      return res.status(409).json({
+        message: 'Solo se puede eliminar el chat cuando ambos usuarios aceptan el intercambio o el intercambio ha finalizado exitosamente.'
+      });
+    }
+
+    await Message.destroy({ where: { chatRoomId: numericChatRoomId } });
+    await TradeAgreement.destroy({ where: { chatRoomId: numericChatRoomId } });
+    await chatRoom.destroy();
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`chat_${numericChatRoomId}`).emit('chatDeleted', { chatRoomId: numericChatRoomId });
+    }
+
+    return res.status(200).json({ message: 'Sala de chat eliminada correctamente.' });
+  } catch (error) {
+    console.error('Error al eliminar chat:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 // ======================= EXPORTACIONES =======================
 
 module.exports = {
   createRoom,      // POST /chat/create-room
   getMessages,     // GET /chat/messages/:chatRoomId
   getChatRoom,     // GET /chat/rooms/:id
-  getUserChatRooms // GET /chat/user/:userId 
+  getUserChatRooms, // GET /chat/user/:userId 
+  uploadChatImage,
+  deleteChat
 };
