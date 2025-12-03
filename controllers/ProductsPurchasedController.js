@@ -6,13 +6,21 @@ const User = require('../models/User');
 // Controlador para registrar una compra
 const createPurchase = async (req, res) => {
 	try {
-		const { idsProducts, totalProducts, FullPayment, FullSwapcoins, idClient } = req.body; //Recuperamos los valores del cuerpo de la solicitud.
+		const { idsProducts, idsProductsChange, totalProducts, FullPayment, FullSwapcoins, idClient } = req.body; // Ahora también recibimos idsProductsChange
 
 		// Validación básica
-		if (!idsProducts || !Array.isArray(idsProducts) || idsProducts.length === 0) {
-			return res.status(400).json({ error: 'Se necesitan los productos.' });
+		if (
+			(!idsProducts || !Array.isArray(idsProducts) || idsProducts.length === 0)
+			&& (!idsProductsChange || !Array.isArray(idsProductsChange) || idsProductsChange.length === 0)
+		) {
+			return res.status(400).json({ error: 'Se necesitan los productos u objetos de intercambio.' });
 		}
-		if (!totalProducts || !FullPayment || !FullSwapcoins || !idClient) {
+		if (
+			totalProducts === undefined || totalProducts === null ||
+			FullPayment === undefined || FullPayment === null ||
+			FullSwapcoins === undefined || FullSwapcoins === null ||
+			!idClient
+		) {
 			return res.status(400).json({ error: 'Todos los campos son requeridos.' });
 		}
 
@@ -21,22 +29,64 @@ const createPurchase = async (req, res) => {
 		};
 		const idBuys = generateShortUUID();
 
+		// Descontar los swapcoins al usuario
+		const user = await User.findByPk(idClient);
+		if (!user) {
+			return res.status(404).json({ error: 'Usuario no encontrado.' });
+		}
+		if (user.swappcoins < FullSwapcoins) {
+			return res.status(400).json({ error: 'Saldo insuficiente de swappcoins.' });
+		}
+		user.swappcoins -= FullSwapcoins;
+		await user.save();
+
+		 // Descontar el stock de productos según el carrito del usuario
+		const CartItem = require('../models/CartItem');
+		// Obtener los items del carrito del usuario
+		const cartItems = await CartItem.findAll({ where: { idUser: idClient } });
+
+		for (const item of cartItems) {
+			if (item.itemType === 'offer' && item.idProductOffer) {
+				// Descontar en ProductOffer
+				const productOffer = await ProductOffer.findByPk(item.idProductOffer);
+				if (productOffer) {
+					productOffer.amount = Math.max(0, productOffer.amount - item.quantity);
+					if (productOffer.amount === 0) {
+						productOffer.availability = false;
+					}
+					await productOffer.save();
+				}
+			} else if (item.itemType === 'exchange' && item.idProduct) {
+				// Descontar en Products
+				const product = await Products.findByPk(item.idProduct);
+				if (product) {
+					product.amount = Math.max(0, product.amount - item.quantity);
+					if (product.amount === 0) {
+						product.availability = false;
+					}
+					await product.save();
+				}
+			}
+		}
+
 		const purchase = await ProductsPurchased.create({ //Actualizamos la tabla con los valores.
 			idBuys,
-			idsProducts,
+			idsProducts: idsProducts || [],
+			idsProductsChange: idsProductsChange || [],
 			totalProducts,
 			FullPayment,
 			FullSwapcoins,
 			idClient
 		});
 
-		return res.status(201).json({ message: 'Compra registrada exitosamente.', purchase });
+		return res.status(201).json({ message: 'Compra registrada exitosamente.', purchase, swappcoinsRestantes: user.swappcoins });
 	} catch (error) {
 		console.error(error);
 		return res.status(500).json({ error: 'Error al registrar la compra.' });
 	}
 };
 
+		       
 // Controlador para obtener todas las compras
 const getAllPurchases = async (req, res) => {
 	   try {

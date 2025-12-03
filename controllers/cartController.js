@@ -1,3 +1,4 @@
+
 const CartItem = require('../models/CartItem');
 const Products = require('../models/Products');
 const ProductOffer = require('../models/ProductOffer');
@@ -113,6 +114,34 @@ const updateItem = async (req, res) => {
   }
 };
 
+// Obtener productos según el ID del usuario
+const getProductsByUser = async (req, res) => {
+  try {
+    const { idUser } = req.params;
+    if (!idUser) return res.status(400).json({ error: 'idUser requerido en parámetros.' });
+
+    // Buscar productos donde el idUser coincida
+    const products = await Products.findAll({ where: { idUser } });
+
+    // Buscar items del carrito del usuario
+    const cartItems = await CartItem.findAll({ where: { idUser } });
+
+    // Validar y eliminar items del carrito según condición de la oferta
+    for (const item of cartItems) {
+      if (item.itemType === 'offer' && item.idProductOffer) {
+        const offer = await ProductOffer.findByPk(item.idProductOffer);
+        if (offer && (offer.amount === 0 || offer.availability === false)) {
+          await item.destroy();
+        }
+      }
+    }
+
+    res.status(200).json({ products });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 //Eliminar item especifico por id
 const removeItem = async (req, res) => {
   try {
@@ -126,4 +155,4 @@ const removeItem = async (req, res) => {
   }
 };
 
-module.exports = { addItem, getCart, updateItem, removeItem };
+module.exports = { addItem, getCart, updateItem, removeItem, getProductsByUser };
