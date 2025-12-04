@@ -389,12 +389,12 @@ const getAllTrades = async (req, res) => {
           include: [
             {
               model: User,
-              as: 'user1',
+              as: 'User1',
               attributes: ['id', 'email', 'username', 'address']
             },
             {
               model: User,
-              as: 'user2',
+              as: 'User2',
               attributes: ['id', 'email', 'username', 'address']
             }
           ]

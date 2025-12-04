@@ -26,6 +26,18 @@ const ChatRoom = sequelize.define('ChatRoom', {
     references: { model: 'products', key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
+  },
+  user1HiddenAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null,
+    field: 'user1HiddenAt',
+  },
+  user2HiddenAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null,
+    field: 'user2HiddenAt',
   }
 }, {
   tableName: 'chat_rooms',
@@ -34,7 +46,3 @@ const ChatRoom = sequelize.define('ChatRoom', {
 
 module.exports = ChatRoom;
 
-// Asociaciones con User para poder incluir los datos en los includes
-const User = require('./User');
-ChatRoom.belongsTo(User, { foreignKey: 'user1Id', as: 'user1' });
-ChatRoom.belongsTo(User, { foreignKey: 'user2Id', as: 'user2' });
