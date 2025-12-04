@@ -32,7 +32,7 @@ const createUser = async(req, res) => { //Crear un nuevo usuario.
             email,
             password: hashedPassword, //Guardamos la contraseña encriptada
             rol,
-            swappcoins: 11100 //Bono de bienvenida por registrarse (+100 swappcoins)
+            swappcoins: 200 //Bono de bienvenida por registrarse (+200 swappcoins)
         });
 
         res.status(201).json({ //Enviamos una respuesta de éxito con los datos del nuevo usuario (sin la contraseña).
@@ -96,7 +96,7 @@ const updateUser = async (req, res) => { //Actualizar la información del usuari
     
     // Si el perfil está completo y no ha recibido el bono antes
     if (isProfileComplete && !user.profileCompletedReward) {
-      user.swappcoins += 200; //Bono por completar perfil (+200 swappcoins)
+      user.swappcoins += 300; //Bono por completar perfil (+300 swappcoins)
       user.profileCompletedReward = true; //Marcar que ya recibió el bono
       await user.save(); //Guardar los cambios
     }
@@ -373,8 +373,6 @@ const resetPassword = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 }
-
-
 
 module.exports = { //Exportamos las funciones para usarlas en las rutas
   createUser,

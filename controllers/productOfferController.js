@@ -22,16 +22,18 @@ const createProductOffer = async (req, res) => {
     const priceDiscount = priceOriginal - (priceOriginal * (discount / 100));
     // Calcular priceSwapcoins según priceOriginal
     let priceSwapcoins = 0;
-    if (priceDiscount > 5000) {
-      priceSwapcoins = 800;
-    } 
-      else if (priceDiscount  > 1000) {
+    if(priceDiscount > 1000000){
+      priceSwapcoins = 3000;
+    }
+    if (priceDiscount > 500000) {
       priceSwapcoins = 1200;
-    } else if (priceDiscount > 500 && priceDiscount < 1000) {
+    } else if (priceDiscount > 250000) {
       priceSwapcoins = 900;
-    } else if (priceDiscount > 300 && priceDiscount < 500) {
-      priceSwapcoins = 600;
-    } else if (priceDiscount > 0 && priceDiscount < 300) {
+    } else if (priceDiscount > 100000 && priceDiscount < 250000) {
+      priceSwapcoins = 700;
+    } else if (priceDiscount > 80000 && priceDiscount < 100000) {
+      priceSwapcoins = 500;
+    } else if (priceDiscount > 0 && priceDiscount < 80000) {
       priceSwapcoins = 300;
     }
 
@@ -187,15 +189,19 @@ async function editProductOffer(req, res) {
     const priceDiscount = priceOriginal - (priceOriginal * (discount / 100));
     // Calcular priceSwapcoins según priceOriginal
     let priceSwapcoins = 0;
-    if (priceDiscount > 5000) {
-      priceSwapcoins = 800;
-    } else if (priceDiscount > 1000) {
+
+    if(priceDiscount > 1000000){
+      priceSwapcoins = 3000;
+    }
+    if (priceDiscount > 500000) {
       priceSwapcoins = 1200;
-    } else if (priceDiscount > 500 && priceDiscount < 1000) {
+    } else if (priceDiscount > 250000) {
       priceSwapcoins = 900;
-    } else if (priceDiscount > 300 && priceDiscount < 500) {
-      priceSwapcoins = 600;
-    } else if (priceDiscount > 0 && priceDiscount < 300) {
+    } else if (priceDiscount > 100000 && priceDiscount < 250000) {
+      priceSwapcoins = 700;
+    } else if (priceDiscount > 80000 && priceDiscount < 100000) {
+      priceSwapcoins = 500;
+    } else if (priceDiscount > 0 && priceDiscount < 80000) {
       priceSwapcoins = 300;
     }
 

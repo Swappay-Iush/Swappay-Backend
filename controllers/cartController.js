@@ -2,6 +2,7 @@
 const CartItem = require('../models/CartItem');
 const Products = require('../models/Products');
 const ProductOffer = require('../models/ProductOffer');
+const User = require('../models/User');
 
 const addItem = async (req, res) => {
   try {
@@ -71,9 +72,21 @@ const getCart = async (req, res) => {
         let product = null;
 
         if (item.itemType === 'offer' && item.idProductOffer) {
-          productOffer = await ProductOffer.findByPk(item.idProductOffer);
+          productOffer = await ProductOffer.findByPk(item.idProductOffer, {
+            include: [{
+              model: User,
+              as: 'offerOwner',
+              attributes: { exclude: ['password'] }
+            }]
+          });
         } else if (item.itemType === 'exchange' && item.idProduct) {
-          product = await Products.findByPk(item.idProduct);
+          product = await Products.findByPk(item.idProduct, {
+            include: [{
+              model: User,
+              as: 'user',
+              attributes: { exclude: ['password'] }
+            }]
+          });
         }
         return { ...item.toJSON(), productOffer, product };
       })
@@ -120,8 +133,15 @@ const getProductsByUser = async (req, res) => {
     const { idUser } = req.params;
     if (!idUser) return res.status(400).json({ error: 'idUser requerido en parámetros.' });
 
-    // Buscar productos donde el idUser coincida
-    const products = await Products.findAll({ where: { idUser } });
+    // Buscar productos donde el idUser coincida, incluyendo información del usuario
+    const products = await Products.findAll({ 
+      where: { idUser },
+      include: [{
+        model: User,
+        as: 'user',
+        attributes: { exclude: ['password'] } // Excluir la contraseña por seguridad
+      }]
+    });
 
     // Buscar items del carrito del usuario
     const cartItems = await CartItem.findAll({ where: { idUser } });

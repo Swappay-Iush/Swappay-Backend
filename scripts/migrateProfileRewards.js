@@ -41,12 +41,12 @@ const migrateProfileRewards = async () => {
 
       if (isProfileComplete) {
         // Otorgar recompensa
-        user.swappcoins += 200;
+        user.swappcoins += 300;
         user.profileCompletedReward = true;
         await user.save();
 
         updatedCount++;
-        console.log(`✅ Usuario ID ${user.id} (${user.username}): +200 SwappCoins otorgados. Nuevo saldo: ${user.swappcoins}`);
+        console.log(`✅ Usuario ID ${user.id} (${user.username}): +300 SwappCoins otorgados. Nuevo saldo: ${user.swappcoins}`);
       } else {
         alreadyCompleteCount++;
       }
