@@ -157,10 +157,10 @@ io.on('connection', (socket) => {
 
 // ======================= TAREA PROGRAMADA: BORRAR MENSAJES VIEJOS =======================
 
-cron.schedule('0 * * * *', async () => {
+cron.schedule('0 0 * * *', async () => {
     try {
-        // Calcula la fecha límite: hace 1 hora desde ahora
-        const limite = new Date(Date.now() - 1 * 60 * 60 * 1000); // 1 hora en milisegundos
+        // Calcula la fecha límite: hace 3 días desde ahora
+        const limite = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000); // 3 días en milisegundos
         
         // Elimina todos los mensajes creados antes de la fecha límite
         const eliminados = await Message.destroy({
