@@ -45,8 +45,18 @@ const createPurchase = async (req, res) => {
 		// Obtener los items del carrito del usuario
 		const cartItems = await CartItem.findAll({ where: { idUser: idClient } });
 
+		// Preparar los arrays con id y quantity
+		const productsWithQuantity = [];
+		const productsChangeWithQuantity = [];
+
 		for (const item of cartItems) {
 			if (item.itemType === 'offer' && item.idProductOffer) {
+				// Agregar al array de productos de oferta con su cantidad
+				productsWithQuantity.push({
+					id: item.idProductOffer,
+					quantity: item.quantity
+				});
+				
 				// Descontar en ProductOffer
 				const productOffer = await ProductOffer.findByPk(item.idProductOffer);
 				if (productOffer) {
@@ -57,6 +67,12 @@ const createPurchase = async (req, res) => {
 					await productOffer.save();
 				}
 			} else if (item.itemType === 'exchange' && item.idProduct) {
+				// Agregar al array de productos de intercambio con su cantidad
+				productsChangeWithQuantity.push({
+					id: item.idProduct,
+					quantity: item.quantity
+				});
+				
 				// Descontar en Products
 				const product = await Products.findByPk(item.idProduct);
 				if (product) {
@@ -71,8 +87,8 @@ const createPurchase = async (req, res) => {
 
 		const purchase = await ProductsPurchased.create({ //Actualizamos la tabla con los valores.
 			idBuys,
-			idsProducts: idsProducts || [],
-			idsProductsChange: idsProductsChange || [],
+			idsProducts: productsWithQuantity,
+			idsProductsChange: productsChangeWithQuantity,
 			totalProducts,
 			FullPayment,
 			FullSwapcoins,
@@ -101,17 +117,43 @@ const getAllPurchases = async (req, res) => {
 
 			   // Obtener toda la información de los productos comprados desde ProductOffer
 			   let products = [];
-			   if (Array.isArray(purchase.idsProducts)) {
-				   products = await ProductOffer.findAll({
-					   where: { id: purchase.idsProducts }
+			   if (Array.isArray(purchase.idsProducts) && purchase.idsProducts.length > 0) {
+				   // Extraer solo los IDs del formato { id, quantity }
+				   const productIds = purchase.idsProducts.map(item => item.id || item);
+				   const productData = await ProductOffer.findAll({
+					   where: { id: productIds }
+				   });
+				   
+				   // Agregar la cantidad a cada producto
+				   products = productData.map(product => {
+					   const purchaseItem = purchase.idsProducts.find(item => 
+						   (item.id || item) === product.id
+					   );
+					   return {
+						   ...product.toJSON(),
+						   purchasedQuantity: purchaseItem?.quantity || 1
+					   };
 				   });
 			   }
 
 			   // Obtener toda la información de los productos de intercambio desde Products
 			   let productsChange = [];
-			   if (Array.isArray(purchase.idsProductsChange)) {
-				   productsChange = await Products.findAll({
-					   where: { id: purchase.idsProductsChange }
+			   if (Array.isArray(purchase.idsProductsChange) && purchase.idsProductsChange.length > 0) {
+				   // Extraer solo los IDs del formato { id, quantity }
+				   const productChangeIds = purchase.idsProductsChange.map(item => item.id || item);
+				   const productChangeData = await Products.findAll({
+					   where: { id: productChangeIds }
+				   });
+				   
+				   // Agregar la cantidad a cada producto
+				   productsChange = productChangeData.map(product => {
+					   const purchaseItem = purchase.idsProductsChange.find(item => 
+						   (item.id || item) === product.id
+					   );
+					   return {
+						   ...product.toJSON(),
+						   purchasedQuantity: purchaseItem?.quantity || 1
+					   };
 				   });
 			   }
 
