@@ -104,6 +104,26 @@ io.on('connection', (socket) => {
                 chatRoom = await ChatRoom.create({ id: numericChatRoomId, user1Id, user2Id });
             }
 
+            // Reactivar chat si estaba oculto por alguno de los usuarios
+            if (chatRoom) {
+                const updates = {};
+                
+                // Si el remitente es user1 y user2 había ocultado el chat, reactivarlo
+                if (chatRoom.user1Id === numericSenderId && chatRoom.user2HiddenAt) {
+                    updates.user2HiddenAt = null;
+                }
+                // Si el remitente es user2 y user1 había ocultado el chat, reactivarlo
+                else if (chatRoom.user2Id === numericSenderId && chatRoom.user1HiddenAt) {
+                    updates.user1HiddenAt = null;
+                }
+                
+                // Aplicar actualizaciones si hay cambios
+                if (Object.keys(updates).length > 0) {
+                    await chatRoom.update(updates);
+                    console.log(`Chat ${numericChatRoomId} reactivado para el receptor`);
+                }
+            }
+
             // Guardar el mensaje en la base de datos
             const trimmedContent = typeof content === 'string' ? content.trim() : '';
 

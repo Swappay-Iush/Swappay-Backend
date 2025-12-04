@@ -352,6 +352,24 @@ const uploadChatImage = async (req, res) => {
       }
     }
 
+    // Reactivar chat si estaba oculto por el receptor
+    const reactivationUpdates = {};
+    
+    // Si el remitente es user1 y user2 había ocultado el chat, reactivarlo
+    if (chatRoom.user1Id === numericRequesterId && chatRoom.user2HiddenAt) {
+      reactivationUpdates.user2HiddenAt = null;
+    }
+    // Si el remitente es user2 y user1 había ocultado el chat, reactivarlo
+    else if (chatRoom.user2Id === numericRequesterId && chatRoom.user1HiddenAt) {
+      reactivationUpdates.user1HiddenAt = null;
+    }
+    
+    // Aplicar actualizaciones si hay cambios
+    if (Object.keys(reactivationUpdates).length > 0) {
+      await chatRoom.update(reactivationUpdates);
+      console.log(`Chat ${numericChatRoomId} reactivado para el receptor`);
+    }
+
     const relativePath = path.posix.join('uploads', 'chat', req.file.filename);
     const fileUrl = `${req.protocol}://${req.get('host')}/${relativePath}`;
 
