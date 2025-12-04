@@ -26,6 +26,18 @@ const ChatRoom = sequelize.define('ChatRoom', {
     references: { model: 'products', key: 'id' },
     onDelete: 'CASCADE',
     onUpdate: 'CASCADE',
+  },
+  user1HiddenAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null,
+    field: 'user1HiddenAt',
+  },
+  user2HiddenAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null,
+    field: 'user2HiddenAt',
   }
 }, {
   tableName: 'chat_rooms',

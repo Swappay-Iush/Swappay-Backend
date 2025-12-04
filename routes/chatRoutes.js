@@ -24,6 +24,9 @@ router.get('/rooms/:id', chatController.getChatRoom);
 // Obtener todas las salas de chat de un usuario
 router.get('/user/:userId', chatController.getUserChatRooms);
 
+// Actualizar visibilidad del chat para el usuario autenticado
+router.patch('/rooms/:chatRoomId/visibility', authenticateJWT, chatController.toggleChatVisibility);
+
 // Eliminar una sala de chat y sus mensajes asociados
 router.delete('/rooms/:chatRoomId', authenticateJWT, chatController.deleteChat);
 

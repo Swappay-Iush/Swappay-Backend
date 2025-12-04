@@ -54,6 +54,16 @@ const createRoom = async (req, res) => {
     // Si no existe, crear una nueva sala
     if (!chatRoom) {
       chatRoom = await ChatRoom.create({ user1Id, user2Id, productId });
+    } else {
+      // Si la sala existe pero fue eliminada (por visibilidad), no debe existir en la base de datos
+      // Si existe pero ambos campos hidden están llenos, la sala debería haber sido eliminada
+      // Si existe y no fue eliminada, pero ambos campos hidden están llenos, eliminamos y creamos una nueva
+      if (chatRoom.user1HiddenAt && chatRoom.user2HiddenAt) {
+        await Message.destroy({ where: { chatRoomId: chatRoom.id } });
+        await TradeAgreement.destroy({ where: { chatRoomId: chatRoom.id } });
+        await chatRoom.destroy();
+        chatRoom = await ChatRoom.create({ user1Id, user2Id, productId });
+      }
     }
 
     // Retorna la sala (nueva o existente) con código 201 (Created)
@@ -116,16 +126,30 @@ const getChatRoom = async (req, res) => {
 const getUserChatRooms = async (req, res) => {
   // Extrae el userId de los parámetros de la URL
   const { userId } = req.params;
+  const { includeHidden } = req.query;
+
+  const numericUserId = Number(userId);
+
+  if (Number.isNaN(numericUserId)) {
+    return res.status(400).json({ message: 'userId debe ser numérico.' });
+  }
 
   try {
+    const includeHiddenRooms = includeHidden === 'true';
+
     // Busca todas las salas donde el usuario participe
     const chatRooms = await ChatRoom.findAll({
       where: {
         // Busca salas donde el usuario sea user1Id O user2Id
-        [Op.or]: [
-          { user1Id: userId },
-          { user2Id: userId }
-        ]
+        [Op.or]: includeHiddenRooms
+          ? [
+              { user1Id: numericUserId },
+              { user2Id: numericUserId }
+            ]
+          : [
+              { user1Id: numericUserId, user1HiddenAt: null },
+              { user2Id: numericUserId, user2HiddenAt: null }
+            ]
       },
       include: [
         {
@@ -170,6 +194,104 @@ const getMessages = async (req, res) => {
   } catch (error) {
     // Captura errores y retorna 500
     res.status(500).json({ message: error.message });
+  }
+};
+
+const toggleChatVisibility = async (req, res) => {
+  const { chatRoomId } = req.params;
+  const requesterId = req.user?.id ?? req.body?.userId;
+  const hiddenInput = req.body?.hidden;
+
+  if (!chatRoomId) {
+    return res.status(400).json({ message: 'chatRoomId es requerido.' });
+  }
+
+  if (requesterId === undefined || requesterId === null) {
+    return res.status(401).json({ message: 'Usuario no autenticado.' });
+  }
+
+  const numericChatRoomId = Number(chatRoomId);
+  const numericRequesterId = Number(requesterId);
+
+  if (Number.isNaN(numericChatRoomId)) {
+    return res.status(400).json({ message: 'chatRoomId debe ser numérico.' });
+  }
+
+  if (Number.isNaN(numericRequesterId)) {
+    return res.status(400).json({ message: 'userId debe ser numérico.' });
+  }
+
+  let shouldHide = true;
+
+  if (hiddenInput !== undefined) {
+    if (typeof hiddenInput === 'string') {
+      shouldHide = hiddenInput.toLowerCase() !== 'false';
+    } else {
+      shouldHide = Boolean(hiddenInput);
+    }
+  }
+
+  try {
+    const chatRoom = await ChatRoom.findByPk(numericChatRoomId);
+
+    if (!chatRoom) {
+      return res.status(404).json({ message: 'Sala de chat no encontrada.' });
+    }
+
+    let fieldName = null;
+
+    if (Number(chatRoom.user1Id) === numericRequesterId) {
+      fieldName = 'user1HiddenAt';
+    } else if (Number(chatRoom.user2Id) === numericRequesterId) {
+      fieldName = 'user2HiddenAt';
+    }
+
+    if (!fieldName) {
+      return res.status(403).json({ message: 'No tienes permisos para actualizar la visibilidad de esta sala.' });
+    }
+
+    const updates = { [fieldName]: shouldHide ? new Date() : null };
+    await chatRoom.update(updates);
+    await chatRoom.reload();
+
+    // Si ambos usuarios han ocultado el chat, eliminar sala y mensajes
+    if (chatRoom.user1HiddenAt && chatRoom.user2HiddenAt) {
+      try {
+        await Message.destroy({ where: { chatRoomId: chatRoom.id } });
+        await TradeAgreement.destroy({ where: { chatRoomId: chatRoom.id } });
+        await chatRoom.destroy();
+      } catch (deleteError) {
+        console.error('Error eliminando sala y mensajes:', deleteError);
+        return res.status(500).json({
+          chatRoomId: chatRoom.id,
+          deleted: false,
+          error: deleteError.message,
+          message: 'Error al eliminar sala y mensajes.'
+        });
+      }
+
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`chat_${chatRoom.id}`).emit('chatDeleted', { chatRoomId: chatRoom.id });
+      }
+
+      return res.status(200).json({
+        chatRoomId: chatRoom.id,
+        deleted: true,
+        message: 'Sala y mensajes eliminados porque ambos usuarios ocultaron el chat.'
+      });
+    }
+
+    return res.status(200).json({
+      chatRoomId: chatRoom.id,
+      hidden: shouldHide,
+      hiddenAt: chatRoom[fieldName],
+      user1HiddenAt: chatRoom.user1HiddenAt,
+      user2HiddenAt: chatRoom.user2HiddenAt
+    });
+  } catch (error) {
+    console.error('Error al actualizar visibilidad del chat:', error);
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -265,55 +387,6 @@ const deleteChat = async (req, res) => {
       return res.status(404).json({ message: 'Sala de chat no encontrada.' });
     }
 
-    if (requesterId !== undefined && requesterId !== null) {
-      const numericRequesterId = Number(requesterId);
-      if (!Number.isNaN(numericRequesterId)) {
-        const participants = [chatRoom.user1Id, chatRoom.user2Id]
-          .map((participantId) => (participantId !== null && participantId !== undefined ? Number(participantId) : null))
-          .filter((participantId) => participantId !== null);
-
-        if (!participants.includes(numericRequesterId)) {
-          const requestUser = await User.findByPk(numericRequesterId);
-
-          if (requestUser?.rol === 'admin') {
-            console.warn(`Administrador ${numericRequesterId} eliminó chat ${numericChatRoomId}`);
-          } else {
-            const updates = {};
-
-            if (chatRoom.user1Id === null || chatRoom.user1Id === undefined) {
-              updates.user1Id = numericRequesterId;
-            } else if (chatRoom.user2Id === null || chatRoom.user2Id === undefined) {
-              updates.user2Id = numericRequesterId;
-            }
-
-            if (Object.keys(updates).length > 0) {
-              await chatRoom.update(updates);
-            } else {
-              return res.status(403).json({ message: 'No tienes permisos para eliminar esta sala.' });
-            }
-          }
-        }
-      }
-    }
-
-    const tradeAgreement = await TradeAgreement.findOne({ where: { chatRoomId: numericChatRoomId } });
-
-    if (!tradeAgreement) {
-      return res.status(409).json({ message: 'Aún no existe un acuerdo de intercambio para esta sala.' });
-    }
-
-    const bothAccepted = tradeAgreement.user1Accepted && tradeAgreement.user2Accepted;
-    const hasSuccessMessage = Array.isArray(tradeAgreement.messagesInfo)
-      ? tradeAgreement.messagesInfo.some((msg) => typeof msg === 'string' && msg.trim().toLowerCase() === 'intercambio exitoso')
-      : false;
-    const tradeCompleted = tradeAgreement.tradeCompleted === 'completado';
-
-    if (!(bothAccepted || hasSuccessMessage || tradeCompleted)) {
-      return res.status(409).json({
-        message: 'Solo se puede eliminar el chat cuando ambos usuarios aceptan el intercambio o el intercambio ha finalizado exitosamente.'
-      });
-    }
-
     await Message.destroy({ where: { chatRoomId: numericChatRoomId } });
     await TradeAgreement.destroy({ where: { chatRoomId: numericChatRoomId } });
     await chatRoom.destroy();
@@ -337,6 +410,7 @@ module.exports = {
   getMessages,     // GET /chat/messages/:chatRoomId
   getChatRoom,     // GET /chat/rooms/:id
   getUserChatRooms, // GET /chat/user/:userId 
+  toggleChatVisibility,
   uploadChatImage,
   deleteChat
 };
