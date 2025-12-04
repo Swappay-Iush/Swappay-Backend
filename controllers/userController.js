@@ -32,7 +32,7 @@ const createUser = async(req, res) => { //Crear un nuevo usuario.
             email,
             password: hashedPassword, //Guardamos la contraseña encriptada
             rol,
-            swappcoins: 100 //Bono de bienvenida por registrarse (+100 swappcoins)
+            swappcoins: 11100 //Bono de bienvenida por registrarse (+100 swappcoins)
         });
 
         res.status(201).json({ //Enviamos una respuesta de éxito con los datos del nuevo usuario (sin la contraseña).
