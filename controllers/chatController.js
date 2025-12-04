@@ -250,16 +250,34 @@ const toggleChatVisibility = async (req, res) => {
       return res.status(403).json({ message: 'No tienes permisos para actualizar la visibilidad de esta sala.' });
     }
 
+    // Actualizar el campo de visibilidad del usuario actual
     const updates = { [fieldName]: shouldHide ? new Date() : null };
     await chatRoom.update(updates);
     await chatRoom.reload();
 
-    // Si ambos usuarios han ocultado el chat, eliminar sala y mensajes
+    // Si ambos usuarios han ocultado el chat, eliminar sala, mensajes y acuerdos
     if (chatRoom.user1HiddenAt && chatRoom.user2HiddenAt) {
       try {
+        // Eliminar mensajes asociados
         await Message.destroy({ where: { chatRoomId: chatRoom.id } });
+        
+        // Eliminar acuerdos de intercambio asociados
         await TradeAgreement.destroy({ where: { chatRoomId: chatRoom.id } });
+        
+        // Eliminar la sala de chat
         await chatRoom.destroy();
+
+        // Emitir evento de Socket.IO para notificar eliminación
+        const io = req.app.get('io');
+        if (io) {
+          io.to(`chat_${chatRoom.id}`).emit('chatDeleted', { chatRoomId: chatRoom.id });
+        }
+
+        return res.status(200).json({
+          chatRoomId: chatRoom.id,
+          deleted: true,
+          message: 'Sala y mensajes eliminados porque ambos usuarios ocultaron el chat.'
+        });
       } catch (deleteError) {
         console.error('Error eliminando sala y mensajes:', deleteError);
         return res.status(500).json({
@@ -269,19 +287,9 @@ const toggleChatVisibility = async (req, res) => {
           message: 'Error al eliminar sala y mensajes.'
         });
       }
-
-      const io = req.app.get('io');
-      if (io) {
-        io.to(`chat_${chatRoom.id}`).emit('chatDeleted', { chatRoomId: chatRoom.id });
-      }
-
-      return res.status(200).json({
-        chatRoomId: chatRoom.id,
-        deleted: true,
-        message: 'Sala y mensajes eliminados porque ambos usuarios ocultaron el chat.'
-      });
     }
 
+    // Si solo uno de los usuarios ocultó el chat, retornar estado actualizado
     return res.status(200).json({
       chatRoomId: chatRoom.id,
       hidden: shouldHide,
