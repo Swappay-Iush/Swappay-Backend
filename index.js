@@ -11,6 +11,9 @@ const cron = require('node-cron');
 const { Op } = require('sequelize');
 const sequelize = require('./database');
 
+// Inicializa asociaciones de modelos
+require('./models/index');
+
 // ======================= MODELOS =======================
 const User = require('./models/User');
 const Products = require('./models/Products');
@@ -50,7 +53,7 @@ const productOfferRoutes = require('./routes/productOfferRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const tradeAgreementRoutes = require('./routes/tradeAgreementRoutes');
 
-
+const ProductsPurchasedRoutes = require("./routes/ProductsPurchasedRoutes");
 
 app.use('/users', userRoutes);
 app.use('/auth', authRoutes);
@@ -62,6 +65,8 @@ app.use('/product-offer', productOfferRoutes);
 
 app.use('/chat', chatRoutes);
 app.use('/chat/trade', tradeAgreementRoutes);
+
+app.use('/products-purchased', ProductsPurchasedRoutes);
 
 app.get('/', (req, res) => {
     res.send("Hola desde la API de Swappay.");
@@ -85,19 +90,65 @@ io.on('connection', (socket) => {
 
 
     // ======================= EVENTO: sendMessage =======================
-    socket.on('sendMessage', async ({ chatRoomId, senderId, content, user1Id, user2Id }) => {
+    socket.on('sendMessage', async ({ chatRoomId, senderId, content, user1Id, user2Id, type = 'text' }) => {
         try {
+            const numericChatRoomId = Number(chatRoomId);
+            const numericSenderId = Number(senderId);
+
+            if (Number.isNaN(numericChatRoomId) || Number.isNaN(numericSenderId)) {
+                console.warn('Identificadores inválidos al enviar mensaje de chat.');
+                return;
+            }
+
             // Si la sala no existe, créala (requiere user1Id y user2Id)
-            let chatRoom = await ChatRoom.findByPk(chatRoomId);
+            let chatRoom = await ChatRoom.findByPk(numericChatRoomId);
             if (!chatRoom && user1Id && user2Id) {
-                chatRoom = await ChatRoom.create({ id: chatRoomId, user1Id, user2Id });
+                chatRoom = await ChatRoom.create({ id: numericChatRoomId, user1Id, user2Id });
+            }
+
+            // Reactivar chat si estaba oculto por alguno de los usuarios
+            if (chatRoom) {
+                const updates = {};
+                
+                // Si el remitente es user1 y user2 había ocultado el chat, reactivarlo
+                if (chatRoom.user1Id === numericSenderId && chatRoom.user2HiddenAt) {
+                    updates.user2HiddenAt = null;
+                }
+                // Si el remitente es user2 y user1 había ocultado el chat, reactivarlo
+                else if (chatRoom.user2Id === numericSenderId && chatRoom.user1HiddenAt) {
+                    updates.user1HiddenAt = null;
+                }
+                
+                // Aplicar actualizaciones si hay cambios
+                if (Object.keys(updates).length > 0) {
+                    await chatRoom.update(updates);
+                    console.log(`Chat ${numericChatRoomId} reactivado para el receptor`);
+                }
             }
 
             // Guardar el mensaje en la base de datos
-            await Message.create({ chatRoomId, senderId, content });
+            const trimmedContent = typeof content === 'string' ? content.trim() : '';
+
+            if (type !== 'text') {
+                type = 'text';
+            }
+
+            if (!trimmedContent) {
+                console.warn('Mensaje de chat vacío recibido y omitido.');
+                return;
+            }
+
+            const message = await Message.create({
+                chatRoomId: numericChatRoomId,
+                senderId: numericSenderId,
+                type,
+                content: trimmedContent
+            });
+
+            const payload = message.get({ plain: true });
 
             // Emitir el mensaje a todos los sockets en la sala chat_{chatRoomId}
-            io.to(`chat_${chatRoomId}`).emit('newMessage', { chatRoomId, senderId, content });
+            io.to(`chat_${numericChatRoomId}`).emit('newMessage', payload);
         } catch (err) {
             console.error('Error en sendMessage:', err);
         }
@@ -106,10 +157,10 @@ io.on('connection', (socket) => {
 
 // ======================= TAREA PROGRAMADA: BORRAR MENSAJES VIEJOS =======================
 
-cron.schedule('0 * * * *', async () => {
+cron.schedule('0 0 * * *', async () => {
     try {
-        // Calcula la fecha límite: hace 1 hora desde ahora
-        const limite = new Date(Date.now() - 1 * 60 * 60 * 1000); // 1 hora en milisegundos
+        // Calcula la fecha límite: hace 3 días desde ahora
+        const limite = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000); // 3 días en milisegundos
         
         // Elimina todos los mensajes creados antes de la fecha límite
         const eliminados = await Message.destroy({

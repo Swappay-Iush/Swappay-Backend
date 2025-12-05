@@ -1,11 +1,14 @@
 const multer = require('multer'); //Importamos Multer para manejar la subida de archivos.
 const path = require('path'); //Importamos path para manejar rutas de archivos.
+const fs = require('fs'); //Importamos fs para crear directorios si no existen.
 
 // Función para crear storage dinámico según la carpeta
 function getStorage(folder, prefix = 'file') { // Carpeta y prefijo dinámicos
   return multer.diskStorage({ // Configuramos el almacenamiento de Multer
     destination: (req, file, cb) => { 
-      cb(null, folder); // Carpeta dinámica
+      const absoluteFolder = path.resolve(process.cwd(), folder);
+      fs.mkdirSync(absoluteFolder, { recursive: true }); // Garantiza que la carpeta exista
+      cb(null, absoluteFolder); // Carpeta dinámica (ruta absoluta)
     },
     filename: (req, file, cb) => { // Nombre de archivo dinámico
       const ext = path.extname(file.originalname); //Obtenemos la extensión del archivo original
@@ -44,8 +47,16 @@ const uploadProductOffer = multer({ // Configuramos Multer para imágenes de ofe
   fileFilter // Usamos el filtro definido arriba
 });
 
+// Middleware para imágenes enviadas en el chat
+const uploadChat = multer({
+  storage: getStorage('uploads/chat/', 'chat'), // Carpeta específica para archivos del chat
+  limits: { fileSize: 5 * 1024 * 1024 }, // Límite: 5 MB
+  fileFilter // Reutiliza el filtro para aceptar solo imágenes
+});
+
 module.exports = {
   uploadProfile,
   uploadProduct,
-  uploadProductOffer
+  uploadProductOffer,
+  uploadChat
 };

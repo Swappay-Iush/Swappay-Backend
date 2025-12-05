@@ -20,7 +20,7 @@ const User = sequelize.define('User', { //Definimos el modelo User con sus atrib
         allowNull: false
     },
     rol: { //Rol del usuario (puede ser 'user' o 'admin')
-        type: DataTypes.ENUM('user', 'admin'),
+        type: DataTypes.ENUM('user', 'admin', "collaborator"),
         allowNull: false,
         defaultValue: 'user'
     },
@@ -48,6 +48,21 @@ const User = sequelize.define('User', { //Definimos el modelo User con sus atrib
     profileImage:{ //Imagen de perfil del usuario (ruta al archivo almacenado)
         type: DataTypes.STRING,
         allowNull: true
+    },
+    swappcoins: { //Balance de Swappcoins del usuario
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0 //Todos los usuarios empiezan con 0 swappcoins
+    },
+    completedTrades: { //Contador de intercambios completados
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0 //Ningún intercambio completado inicialmente
+    },
+    profileCompletedReward: { //Indica si el usuario ya recibió el bono por completar su perfil
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false //No ha recibido el bono de perfil completo
     }
 }, {
     tableName: 'users', //Nombre de la tabla en la base de datos

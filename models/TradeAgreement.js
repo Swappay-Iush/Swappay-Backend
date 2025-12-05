@@ -75,9 +75,16 @@ const TradeAgreement = sequelize.define('TradeAgreement', {
    * Se actualiza automáticamente según los estados de aceptación
    */
   tradeCompleted: {
-    type: DataTypes.ENUM('pendiente', 'en_proceso'),
+    type: DataTypes.ENUM("pendiente", "en_proceso", "completado"),
     allowNull: false,
     defaultValue: 'pendiente',
+  },
+
+
+  messagesInfo: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: ["En negociación"]
   },
   
   // ======================= COLUMNA: completedAt =======================
@@ -99,21 +106,26 @@ const TradeAgreement = sequelize.define('TradeAgreement', {
   /**
    * Hook: Antes de guardar (crear o actualizar)
    * Lógica: 
-   *   - Si ambos usuarios aceptaron → tradeCompleted = 'en_proceso'
-   *   - Si alguno no ha aceptado → tradeCompleted = 'pendiente'
+   *   - Si ambos usuarios aceptaron Y tradeCompleted aún es 'pendiente' → cambiar a 'en_proceso'
+   *   - Si alguno no ha aceptado Y tradeCompleted no es 'completado' → cambiar a 'pendiente'
    */
   hooks: {
     beforeSave: (tradeAgreement) => {
+      // No modificar si ya está completado
+      if (tradeAgreement.tradeCompleted === 'completado') {
+        return;
+      }
+      
       // Si ambos usuarios aceptaron, cambiar estado a "en_proceso"
       if (tradeAgreement.user1Accepted && tradeAgreement.user2Accepted) {
-        tradeAgreement.tradeCompleted = 'en_proceso'; // setter mapea a 1 en BD
+        tradeAgreement.tradeCompleted = 'en_proceso';
         // Solo registrar la fecha la primera vez que pasa a "en_proceso"
         if (!tradeAgreement.completedAt) {
           tradeAgreement.completedAt = new Date();
         }
       } else {
         // Si alguno retiró su aceptación, volver a "pendiente"
-        tradeAgreement.tradeCompleted = 'pendiente'; // setter mapea a 0 en BD
+        tradeAgreement.tradeCompleted = 'pendiente';
         tradeAgreement.completedAt = null;
       }
     }
@@ -121,3 +133,17 @@ const TradeAgreement = sequelize.define('TradeAgreement', {
 });
 
 module.exports = TradeAgreement;
+
+// ======================= ASOCIACIONES =======================
+const ChatRoom = require('./ChatRoom');
+const User = require('./User');
+
+// Un TradeAgreement pertenece a una sala de chat
+TradeAgreement.belongsTo(ChatRoom, {
+  foreignKey: 'chatRoomId',
+  as: 'chatRoom'
+});
+
+// Para el include de usuarios en ChatRoom (si no está en ChatRoom.js, debe agregarse allí):
+// ChatRoom.belongsTo(User, { foreignKey: 'user1Id', as: 'user1' });
+// ChatRoom.belongsTo(User, { foreignKey: 'user2Id', as: 'user2' });

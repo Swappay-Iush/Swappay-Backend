@@ -26,6 +26,8 @@ const loginUser = async (req, res) => { //Inicio de sesión del usuario.
       })
       .json({ //Enviamos una respuesta con los datos del usuario (sin la contraseña).
         username: user.username, //Nombre de usuario
+        rol: user.rol,
+        swappcoins: user.swappcoins, //Balance de Swappcoins
         message: 'Autenticación exitosa' //Mensaje de éxito
       });
   } catch (error) {

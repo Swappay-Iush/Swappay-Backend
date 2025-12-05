@@ -2,6 +2,7 @@ const User = require('./User');           // Modelo de usuarios
 const Products = require('./Products');   // Modelo de productos
 const ProductOffer = require('./ProductOffer'); // Modelo de ofertas de productos
 const ChatRoom = require('./ChatRoom');   // Modelo de sala de chat
+const CartItem = require('./CartItem');   // Modelo de items del carrito
 
 //Asociaciones
 
@@ -24,4 +25,16 @@ ChatRoom.belongsTo(User, { foreignKey: 'user2Id', as: 'User2' });
 // ChatRoom pertenece a Products como Product
 ChatRoom.belongsTo(Products, { foreignKey: 'productId', as: 'Product' });
 
-module.exports = { User, Products, ProductOffer, ChatRoom };
+// CartItem pertenece a User
+CartItem.belongsTo(User, { foreignKey: 'idUser', as: 'user', onDelete: 'CASCADE' });
+
+// CartItem pertenece a ProductOffer (para items tipo 'offer')
+CartItem.belongsTo(ProductOffer, { foreignKey: 'idProductOffer', as: 'productOffer', onDelete: 'CASCADE' });
+
+// CartItem pertenece a Products (para items tipo 'exchange')
+CartItem.belongsTo(Products, { foreignKey: 'idProduct', as: 'product', onDelete: 'CASCADE' });
+
+// Un usuario puede tener muchos items en su carrito
+User.hasMany(CartItem, { foreignKey: 'idUser', as: 'cartItems', onDelete: 'CASCADE' });
+
+module.exports = { User, Products, ProductOffer, ChatRoom, CartItem };

@@ -31,7 +31,8 @@ const createUser = async(req, res) => { //Crear un nuevo usuario.
             country,
             email,
             password: hashedPassword, //Guardamos la contraseña encriptada
-            rol
+            rol,
+            swappcoins: 200 //Bono de bienvenida por registrarse (+200 swappcoins)
         });
 
         res.status(201).json({ //Enviamos una respuesta de éxito con los datos del nuevo usuario (sin la contraseña).
@@ -49,7 +50,7 @@ const createUser = async(req, res) => { //Crear un nuevo usuario.
 //PUT
 const updateUser = async (req, res) => { //Actualizar la información del usuario.
   const { id } = req.params; //Obtenemos el ID del usuario desde los parámetros de la ruta.
-  const { username, country, email, city, phone, address, gender, dateBirth } = req.body; //Obtenemos los campos a actualizar desde el cuerpo de la solicitud.
+  const { username, country, email, city, phone, address, gender, dateBirth, rol } = req.body; //Obtenemos los campos a actualizar desde el cuerpo de la solicitud.
 
   try {
     // Buscar el usuario por ID
@@ -84,9 +85,21 @@ const updateUser = async (req, res) => { //Actualizar la información del usuari
     if (address !== undefined) updatedData.address = address;
     if (gender !== undefined) updatedData.gender = gender;
     if (dateBirth !== undefined) updatedData.dateBirth = dateBirth;
+    if (rol !== undefined) updatedData.rol = rol;
 
     // Guardar los cambios
     await user.update(updatedData); //Actualizamos el usuario con los datos proporcionados
+
+    // Verificar si el perfil está completo y dar recompensa si es la primera vez
+    const isProfileComplete = user.city && user.phone && user.address && 
+                              user.gender && user.dateBirth;
+    
+    // Si el perfil está completo y no ha recibido el bono antes
+    if (isProfileComplete && !user.profileCompletedReward) {
+      user.swappcoins += 300; //Bono por completar perfil (+300 swappcoins)
+      user.profileCompletedReward = true; //Marcar que ya recibió el bono
+      await user.save(); //Guardar los cambios
+    }
 
     res.status(200).json({ message: 'Información Actualizada.', user });
 
@@ -212,6 +225,31 @@ const uploadProfileImage = async (req, res) => { //Actualizar la imagen de perfi
   }
 };
 
+// Obtener balance de Swappcoins
+const getSwappcoinsBalance = async (req, res) => { //Consultar el balance de Swappcoins de un usuario.
+  const { id } = req.params; //Obtenemos el ID del usuario desde los parámetros de la ruta.
+  
+  try {
+    const user = await User.findByPk(id, { //Buscamos el usuario por su ID.
+      attributes: ['id', 'username', 'swappcoins', 'completedTrades', 'profileCompletedReward'] //Seleccionamos solo los campos necesarios
+    });
+    
+    if (!user) { //Si no encontramos el usuario, enviamos un error 404 (no encontrado).
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    
+    res.status(200).json({ //Enviamos el balance de Swappcoins en la respuesta.
+      userId: user.id,
+      username: user.username,
+      swappcoins: user.swappcoins,
+      completedTrades: user.completedTrades,
+      profileCompletedReward: user.profileCompletedReward
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 const deleteProfileImage = async (req, res) => { //Eliminar la imagen de perfil del usuario.
   try {
     const { id } = req.params; //Obtenemos el ID del usuario desde los parámetros de la ruta.
@@ -238,12 +276,114 @@ const deleteProfileImage = async (req, res) => { //Eliminar la imagen de perfil 
   }
 };
 
+const getAllUsers = async(req, res) => {
+    try {
+        const usuarios = await User.findAll(); //Buscamos todos los usuarios en la base de datos.
+        res.status(200).json(usuarios); //Enviamos los usuarios en la respuesta.
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+}
+
+
+// Eliminar usuario por administrador
+const deleteUserByAdmin = async (req, res) => {
+  const { id } = req.params;
+  // Validar que el usuario autenticado sea admin
+  if (!req.user || req.user.rol !== 'admin') {
+    return res.status(403).json({ message: 'Acceso denegado: solo administradores pueden eliminar usuarios.' });
+  }
+  try {
+    const user = await User.findByPk(id);
+    if (!user) return res.status(404).json({ message: 'Usuario no encontrado' });
+
+    // Eliminar productos del usuario y sus imágenes
+    const productos = await Products.findAll({ where: { idUser: id } });
+    productos.forEach(producto => {
+      [producto.image1, producto.image2, producto.image3].forEach(img => {
+        if (img) {
+          const fileName = path.basename(img);
+          const imgPath = path.join(__dirname, '..', 'uploads', 'products', fileName);
+          try {
+            if (fs.existsSync(imgPath)) {
+              fs.unlinkSync(imgPath);
+            }
+          } catch (err) {
+            res.status(400).json({ err });
+          }
+        }
+      });
+    });
+    await Products.destroy({ where: { idUser: id } });
+
+    // Eliminar ofertas de productos del usuario y sus imágenes
+    const ofertas = await ProductOffer.findAll({ where: { idUser: id } });
+    ofertas.forEach(oferta => {
+      [oferta.img1, oferta.img2, oferta.img3].forEach(img => {
+        if (img) {
+          const fileName = path.basename(img);
+          const imgPath = path.join(__dirname, '..', 'uploads', 'productOffer', fileName);
+          try {
+            if (fs.existsSync(imgPath)) {
+              fs.unlinkSync(imgPath);
+            }
+          } catch (err) {
+            res.status(400).json({ err });
+          }
+        }
+      });
+    });
+    await ProductOffer.destroy({ where: { idUser: id } });
+
+    // Eliminar imagen de perfil si existe
+    if (user.profileImage) {
+      const imagePath = path.join(__dirname, '..', 'uploads', user.profileImage);
+      if (fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
+      }
+    }
+
+    await user.destroy();
+
+    res.json({ message: 'Usuario eliminado correctamente por administrador.' });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
+
+// Resetear contraseña por administrador
+const resetPassword = async (req, res) => {
+  const { id } = req.params;
+  // Validar que el usuario autenticado sea admin
+  if (!req.user || req.user.rol !== 'admin') {
+    return res.status(403).json({ message: 'Acceso denegado: solo administradores pueden resetear contraseñas.' });
+  }
+  try {
+    const user = await User.findByPk(id);
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+    const newPassword = "000000";
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    await user.save();
+    return res.status(200).json({ message: 'Contraseña reseteada correctamente', userId: id });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+}
+
 module.exports = { //Exportamos las funciones para usarlas en las rutas
-    createUser,
-    countries,
-    updateUser,
-    updatePassword,
-    deleteUser,
-    uploadProfileImage,
-    deleteProfileImage
+  createUser,
+  countries,
+  updateUser,
+  updatePassword,
+  deleteUser,
+  uploadProfileImage,
+  deleteProfileImage,
+  getAllUsers,
+  resetPassword,
+  deleteUserByAdmin,
+  getSwappcoinsBalance
 }
